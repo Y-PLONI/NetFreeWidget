@@ -68,7 +68,6 @@ namespace NetFreeWidget
             StartDateInput.Background = new SolidColorBrush(isDark ? Color.FromArgb(51, 255, 255, 255) : Color.FromArgb(25, 0, 0, 0));
             QuotaInput.Foreground = TitleText.Foreground;
             QuotaInput.Background = StartDateInput.Background;
-            WeekendCheckbox.Foreground = TitleText.Foreground;
             
             // Progress Bar Track
             ProgressBg.Background = new SolidColorBrush(isDark ? Color.FromArgb(51, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0));

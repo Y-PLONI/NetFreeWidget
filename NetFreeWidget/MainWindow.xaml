@@ -95,15 +95,17 @@
             <!-- Settings View (Overlay) -->
             <Border x:Name="SettingsView" Grid.Row="1" Grid.RowSpan="3" Background="#EE1A1A1A" Visibility="Collapsed" CornerRadius="8" Padding="5">
                 <StackPanel>
-                    <TextBlock Text="תאריך התחלה" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,3"/>
+                    <TextBlock Text="תאריך התחלה" Foreground="{Binding Foreground, ElementName=UsageText}" FontSize="11" Margin="0,0,0,3"/>
                     <TextBox x:Name="StartDateInput" Height="24" Padding="3" Margin="0,0,0,8" 
                              Background="#33FFFFFF" Foreground="White" BorderThickness="0" ToolTip="פורמט: DD/MM/YYYY"/>
 
-                    <TextBlock Text="חבילה (GB)" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,3"/>
+                    <TextBlock Text="חבילה (GB)" Foreground="{Binding Foreground, ElementName=UsageText}" FontSize="11" Margin="0,0,0,3"/>
                     <TextBox x:Name="QuotaInput" Height="24" Padding="3" Margin="0,0,0,8" 
                              Background="#33FFFFFF" Foreground="White" BorderThickness="0"/>
 
-                    <CheckBox x:Name="WeekendCheckbox" Content="סופ&quot;ש כיום אחד" Foreground="#E0E0E0" FontSize="11" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="WeekendCheckbox" Margin="0,0,0,12" VerticalContentAlignment="Center">
+                        <TextBlock Text="סופ&quot;ש כיום אחד" Foreground="{Binding Foreground, ElementName=UsageText}" FontSize="11" />
+                    </CheckBox>
 
                     <Button Content="שמור וחזור" Background="#2196F3" Foreground="White" BorderThickness="0" Height="28" 
                             Cursor="Hand" Click="SaveBtn_Click" FontSize="12">
