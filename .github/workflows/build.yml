@@ -21,22 +21,37 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
-    - name: Publish Single EXE
+    - name: Publish Standalone EXE (Large)
       # מקמפל לקובץ EXE יחיד, כולל את סביבת הריצה של .NET בתוכו (self-contained) כך שלא צריך להתקין כלום
-      run: dotnet publish NetFreeWidget/NetFreeWidget.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      run: |
+        dotnet publish NetFreeWidget/NetFreeWidget.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/standalone
+        Rename-Item publish/standalone/NetFreeWidget.exe NetFreeWidget-Standalone.exe
 
-    - name: Upload Artifact
+    - name: Publish Framework-Dependent EXE (Small)
+      # מקמפל לקובץ EXE בודד אבל ללא סביבת הריצה, שוקל פחות אבל מצריך .NET מותקן במחשב
+      run: |
+        dotnet publish NetFreeWidget/NetFreeWidget.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/dependent
+        Rename-Item publish/dependent/NetFreeWidget.exe NetFreeWidget-Light.exe
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: NetFreeWidget-Executable
-        path: publish/NetFreeWidget.exe
+        name: NetFreeWidget-Executables
+        path: |
+          publish/standalone/NetFreeWidget-Standalone.exe
+          publish/dependent/NetFreeWidget-Light.exe
 
     - name: Release to GitHub Releases
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: commit-${{ github.sha }}    # יוצר תיוג פרטי לכל קומיט
+        tag_name: commit-${{ github.sha }}
         name: Build from Commit ${{ github.sha }}
-        files: publish/NetFreeWidget.exe      # הקובץ שיפורסם ב-Releases
+        files: |
+          publish/standalone/NetFreeWidget-Standalone.exe
+          publish/dependent/NetFreeWidget-Light.exe
         body: |
+          **NetFreeWidget-Standalone.exe**: גרסה מלאה הכוללת את .NET (קובץ גדול, עובד עצמאית).
+          **NetFreeWidget-Light.exe**: גרסה קלה הדורשת התקנת .NET 8 על מחשב היעד קודם לכן.
+          
           אוטומטית נוצר על ידי GitHub Actions עבור קומיט ${{ github.sha }}
-        prerelease: true                      # אפשר להגדיר כ-false אם תרצה שזה ייחשב לשחרור יציב
+        prerelease: true
