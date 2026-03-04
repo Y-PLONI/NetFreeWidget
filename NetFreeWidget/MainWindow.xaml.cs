@@ -253,7 +253,7 @@ namespace NetFreeWidget
             {
                 UpdateStatusVisuals(true, false, false);
 
-                StatusText1.Inlines.Add(new System.Windows.Documents.Run("⚠️ חריגה: ") { FontWeight = FontWeights.Bold });
+                StatusText1.Inlines.Add(new System.Windows.Documents.Run("חריגה: ") { FontWeight = FontWeights.Bold });
                 StatusText1.Inlines.Add(new System.Windows.Documents.Run($"{(currentUsageGb - expectedGb):F2} GB מעל המומלץ.  "));
 
                 if (elapsedUnits > 0)
@@ -266,7 +266,8 @@ namespace NetFreeWidget
                         var exhaustDate = UsageCalculator.PredictExhaustionDate(today, remainingGb, ratePerUnit, settings.WeekendMode);
                         if (exhaustDate.HasValue)
                         {
-                            StatusText1.Inlines.Add(new System.Windows.Documents.Run("📉 תחזית: ") { FontWeight = FontWeights.Bold });
+                            StatusText1.Inlines.Add(new System.Windows.Documents.LineBreak());
+                            StatusText1.Inlines.Add(new System.Windows.Documents.Run("תחזית: ") { FontWeight = FontWeights.Bold });
                             
                             string dayName = exhaustDate.Value.ToString("dddd", new CultureInfo("he-IL"));
                             string dateStr = exhaustDate.Value.ToString("dd/MM", CultureInfo.InvariantCulture);
@@ -275,7 +276,8 @@ namespace NetFreeWidget
                     }
                     else
                     {
-                        StatusText1.Inlines.Add(new System.Windows.Documents.Run("📉 תחזית: ") { FontWeight = FontWeights.Bold });
+                        StatusText1.Inlines.Add(new System.Windows.Documents.LineBreak());
+                        StatusText1.Inlines.Add(new System.Windows.Documents.Run("תחזית: ") { FontWeight = FontWeights.Bold });
                         StatusText1.Inlines.Add(new System.Windows.Documents.Run("החבילה הסתיימה לחלוטין!"));
                     }
                 }
@@ -283,7 +285,7 @@ namespace NetFreeWidget
             else
             {
                 UpdateStatusVisuals(false, false, true);
-                StatusText1.Inlines.Add(new System.Windows.Documents.Run("✅ הכל תקין: "));
+                StatusText1.Inlines.Add(new System.Windows.Documents.Run("הכל תקין: "));
                 StatusText1.Inlines.Add(new System.Windows.Documents.Run($"נותרו {(expectedGb - currentUsageGb):F1} GB להיום."));
             }
         }
