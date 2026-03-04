@@ -1,0 +1,42 @@
+name: Build NetFreeWidget EXE
+
+on:
+  push:                # ירוץ בכל קומיט
+  pull_request:
+  workflow_dispatch:   # יאפשר הרצה ידנית
+
+permissions:
+  contents: write      # חובה! זה נותן הרשאה ליצור Release
+
+jobs:
+  build:
+    runs-on: windows-latest # חובה להשתמש בווינדוס כדי לקמפל WPF
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Publish Single EXE
+      # מקמפל לקובץ EXE יחיד, כולל את סביבת הריצה של .NET בתוכו (self-contained) כך שלא צריך להתקין כלום
+      run: dotnet publish NetFreeWidget/NetFreeWidget.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: NetFreeWidget-Executable
+        path: publish/NetFreeWidget.exe
+
+    - name: Release to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: commit-${{ github.sha }}    # יוצר תיוג פרטי לכל קומיט
+        name: Build from Commit ${{ github.sha }}
+        files: publish/NetFreeWidget.exe      # הקובץ שיפורסם ב-Releases
+        body: |
+          אוטומטית נוצר על ידי GitHub Actions עבור קומיט ${{ github.sha }}
+        prerelease: true                      # אפשר להגדיר כ-false אם תרצה שזה ייחשב לשחרור יציב
