@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+<title id="title">NetFree Widget — data allowance meter</title>
+<desc id="desc">NetFree shield and bird inside a green data-usage meter, with download and upload arrows. Community widget icon, not an official NetFree application.</desc>
+<defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF"/><stop offset="0.52" stop-color="#FAFCFC"/><stop offset="1" stop-color="#EDF4F3"/>
+    </linearGradient>
+    <linearGradient id="meter" x1="0" y1="0.2" x2="0.9" y2="0.8">
+      <stop stop-color="#7CC6B5"/><stop offset="0.52" stop-color="#499F8C"/><stop offset="1" stop-color="#287D6B"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="0.8">
+      <stop stop-color="#75B5A5"/><stop offset="1" stop-color="#3E8F7C"/>
+    </linearGradient>
+    <linearGradient id="upperShield" x1="0" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#AEB8BC"/><stop offset="1" stop-color="#94A1A6"/>
+    </linearGradient>
+    <linearGradient id="lowerShield" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#829298"/><stop offset="1" stop-color="#5C6E77"/>
+    </linearGradient>
+  </defs>
+<path d="M 265.3337 699.9776 A 322 322 0 1 1 758.6663 699.9776" fill="none" stroke="#D7E3DF" stroke-width="68" stroke-linecap="round"/><path d="M 265.3337 699.9776 A 322 322 0 1 1 778.9501 312.9399" fill="none" stroke="url(#meter)" stroke-width="68" stroke-linecap="round"/><path d="M294.784 634.062 L283.043 641.686" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M256.935 448.025 L243.147 445.594" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M356.130 286.153 L347.704 274.973" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M539.073 235.419 L540.536 221.496" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M707.470 323.081 L718.036 313.896" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M770.842 502.039 L784.834 502.528" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><path d="M729.216 634.062 L740.957 641.686" stroke="#A9BBB5" stroke-width="7" stroke-linecap="round"/><g transform="translate(290.8786 269) scale(0.0131)" fill-rule="evenodd"><path d="M30602 4384c-19,254 503,3239 315,7299 -1303,-638 -2692,-1129 -4087,-1447 -1759,-401 -3527,-526 -5149,-323 -1270,159 -2461,517 -3507,1097 -2862,-4756 -6463,-6849 -9847,-7603 -295,-66 -588,-122 -879,-168 5593,-1549 9194,-3227 9217,-3238l0 -1c0,0 5708,2665 13937,4384z" fill="url(#upperShield)"/><path d="M2554 6943c-299,4028 -305,12118 4082,18859 2290,-3255 4973,-5737 7797,-7553l-105 -486c-726,-3372 -2504,-5752 -4617,-7429 -2272,-1804 -4945,-2820 -7157,-3391z" fill="#98A5AB"/><path d="M30365 15564c-1058,6614 -4401,14449 -13850,18470l0 0 -1 0 -2 2 0 -3c-4230,-1801 -6927,-4158 -9052,-7036 3031,-4197 4848,-5931 8752,-8407 3731,-2218 7252,-3047 10226,-3199 1451,-75 2773,10 3927,173z" fill="url(#lowerShield)"/><path d="M26553 11470c2610,595 5204,1849 7206,3555 -3303,-1020 -10328,-2200 -18192,2475 -2029,-9414 -11500,-11775 -15567,-12358 3579,-1158 12068,-2591 17499,7232l243 441 409 -293c2136,-1532 5275,-1765 8402,-1052z" fill="url(#wing)"/></g><g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="19"><path d="M478 773 V835 M453 811 L478 836 L503 811" stroke="#3E937F"/><path d="M550 836 V774 M525 798 L550 773 L575 798" stroke="#849A91"/></g>
+</svg>
