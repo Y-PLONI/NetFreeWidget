@@ -96,6 +96,8 @@
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <!-- SelfUpdater installs new versions of this package. -->
+    <rescap:Capability Name="packageManagement" />
     <Capability Name="internetClient" />
   </Capabilities>
 </Package>

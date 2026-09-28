@@ -12,6 +12,8 @@ namespace NetFreeWidget.Core
 
         public static void Error(string source, Exception ex) => Error(source, $"{ex.GetType().Name}: {ex.Message}");
 
+        public static void Info(string source, string message) => Error(source, message);
+
         public static void Error(string source, string message)
         {
             try

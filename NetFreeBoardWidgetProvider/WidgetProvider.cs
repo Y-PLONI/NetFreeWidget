@@ -39,6 +39,7 @@ namespace NetFreeBoardWidgetProvider
         public void CreateWidget(WidgetContext widgetContext)
         {
             ActiveWidgets[widgetContext.Id] = widgetContext.Size;
+            SelfUpdater.CheckInBackground();
             _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.Size, force: false);
         }
 
@@ -53,6 +54,7 @@ namespace NetFreeBoardWidgetProvider
         public void Activate(WidgetContext widgetContext)
         {
             ActiveWidgets[widgetContext.Id] = widgetContext.Size;
+            SelfUpdater.CheckInBackground();
             _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.Size, force: false);
         }
 

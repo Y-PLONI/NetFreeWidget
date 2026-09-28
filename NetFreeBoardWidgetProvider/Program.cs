@@ -31,7 +31,28 @@ namespace NetFreeBoardWidgetProvider
         /// <summary>Set when the last widget is deleted; Windows relaunches the COM server when a widget is added again.</summary>
         internal static readonly ManualResetEvent ExitEvent = new(false);
 
-        static void Main(string[] args)
+        /// <summary>
+        /// Started by Windows as the COM server. "--update [feed]" instead runs one update check and exits
+        /// (0 updated, 10 already up to date, 1 failed); the tests use it, and it works outside the package.
+        /// </summary>
+        static int Main(string[] args)
+        {
+            if (args.Length >= 1 && args[0] == "--update")
+                return RunUpdate(args.Length >= 2 ? args[1] : null);
+
+            RunServer();
+            return 0;
+        }
+
+        static int RunUpdate(string? feed) =>
+            SelfUpdater.RunAsync(feed).GetAwaiter().GetResult() switch
+            {
+                SelfUpdater.Result.Updated => 0,
+                SelfUpdater.Result.UpToDate => 10,
+                _ => 1,
+            };
+
+        static void RunServer()
         {
             try
             {
