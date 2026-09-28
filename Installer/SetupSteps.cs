@@ -47,14 +47,15 @@ namespace WidgetSetup
         /// Installs from the .appinstaller URI through the Appx module that ships with Windows. Installing this
         /// way (not from the .msix directly) is what makes Windows check that URI for updates later on.
         /// When App Installer cannot download the packages itself, falls back to downloading them here and
-        /// installing them locally; <c>autoUpdates</c> is then false. See install-package.ps1.
+        /// installing them locally; <c>viaAppInstaller</c> is then false. See install-package.ps1.
+        /// <paramref name="forceFallback"/> skips the first attempt (tests).
         /// </summary>
-        public static (bool ok, bool autoUpdates, string output) InstallPackage(string appInstallerUri)
+        public static (bool ok, bool viaAppInstaller, string output) InstallPackage(string appInstallerUri, bool forceFallback = false)
         {
             string uri = appInstallerUri.Replace("'", "''");
             string script;
             using (var reader = new StreamReader(Config.Resource("install-package.ps1"), Encoding.UTF8))
-                script = $"$AppInstallerUri = '{uri}'\n" + reader.ReadToEnd();
+                script = $"$AppInstallerUri = '{uri}'\n$ForceFallback = ${(forceFallback ? "true" : "false")}\n" + reader.ReadToEnd();
 
             var psi = new ProcessStartInfo(
                 Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),

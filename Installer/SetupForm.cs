@@ -90,11 +90,10 @@ namespace WidgetSetup
                 }
 
                 SetStatus("מוריד ומתקין את הווידג'ט...\r\nזה עשוי לקחת דקה או שתיים.");
-                var (installed, autoUpdates, output) = await Task.Run(() => SetupSteps.InstallPackage(_config.AppInstallerUri));
-                if (installed && autoUpdates)
+                // Also after the fallback download: the widget then checks for updates and installs them itself.
+                var (installed, _, output) = await Task.Run(() => SetupSteps.InstallPackage(_config.AppInstallerUri));
+                if (installed)
                     Finish($"ההתקנה הושלמה!\r\n{_config.Done}\r\nהווידג'ט יתעדכן מעצמו כשתצא גרסה חדשה.", ok: true);
-                else if (installed)
-                    Finish($"ההתקנה הושלמה!\r\n{_config.Done}\r\nברשת הזו Windows לא מצליח להוריד עדכונים בעצמו, ולכן העדכונים האוטומטיים לא נרשמו. לעדכון יש להריץ שוב את המתקין.", ok: true);
                 else
                     Finish("ההתקנה נכשלה:\r\n" + output, ok: false);
             }

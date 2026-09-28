@@ -20,6 +20,7 @@ namespace WidgetSetup
         /// Usage: NetFreeWidget-Setup.exe [--quiet] [--appinstaller &lt;uri&gt;] [--log &lt;file&gt;]
         ///   --quiet         no window; the result is the exit code (and the log file, if given)
         ///   --appinstaller  install from another .appinstaller (tests, mirrors) instead of the one in setup.ini
+        ///   --test-fallback go straight to the fallback download (tests)
         /// </summary>
         [STAThread]
         private static int Main(string[] args)
@@ -28,7 +29,7 @@ namespace WidgetSetup
                 return SetupSteps.TrustInProcess();
 
             var config = Config.Load();
-            bool quiet = false;
+            bool quiet = false, forceFallback = false;
             string? log = null;
             for (int i = 0; i < args.Length; i++)
             {
@@ -37,11 +38,12 @@ namespace WidgetSetup
                     case "--quiet": quiet = true; break;
                     case "--appinstaller" when i + 1 < args.Length: config.AppInstallerUri = args[++i]; break;
                     case "--log" when i + 1 < args.Length: log = args[++i]; break;
+                    case "--test-fallback": forceFallback = true; break;
                 }
             }
 
             if (quiet)
-                return RunQuiet(config, log);
+                return RunQuiet(config, log, forceFallback);
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -49,7 +51,7 @@ namespace WidgetSetup
             return ExitOk;
         }
 
-        private static int RunQuiet(Config config, string? log)
+        private static int RunQuiet(Config config, string? log, bool forceFallback)
         {
             void Log(string line)
             {
@@ -67,10 +69,10 @@ namespace WidgetSetup
                     return ExitCertFailed;
 
                 Log($"installing from {config.AppInstallerUri}");
-                var (ok, autoUpdates, output) = SetupSteps.InstallPackage(config.AppInstallerUri);
+                var (ok, viaAppInstaller, output) = SetupSteps.InstallPackage(config.AppInstallerUri, forceFallback);
                 Log(!ok ? "install failed: " + output
-                    : autoUpdates ? "installed"
-                    : "installed from downloaded files, without automatic updates: " + output);
+                    : viaAppInstaller ? "installed"
+                    : "installed from downloaded files: " + output);
                 return ok ? ExitOk : ExitInstallFailed;
             }
             catch (Exception ex)
