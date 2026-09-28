@@ -141,7 +141,7 @@ jobs:
             Copy-Item $d.FullName (Join-Path $env:OUT_DIR "Dependency_$($d.Name)")
           }
 
-          # Offline fallback for machines that cannot reach the release URLs (no automatic updates).
+          # Manual fallback for machines where the installer does not run; the widget still updates itself.
           Copy-Item .github/scripts/install.ps1 $env:OUT_DIR
 
       - name: Sign
@@ -233,9 +233,9 @@ jobs:
             'אם Windows מציג "Windows protected your PC": "More info" ← "Run anyway".'
             ''
             '### עדכונים'
-            'מי שהתקין דרך המתקין מקבל גרסאות חדשות אוטומטית; אין צורך להוריד כלום.'
+            'הווידג''ט מתעדכן מעצמו כשיוצאת גרסה חדשה, גם ברשתות מסוננות; אין צורך להוריד כלום.'
             ''
-            '### התקנה ידנית (בלי עדכונים אוטומטיים)'
+            '### התקנה ידנית'
             'להוריד את כל הקבצים לאותה תיקייה ולהריץ PowerShell: `powershell -ExecutionPolicy Bypass -File .\install.ps1`'
             ''
             "Commit: $env:GITHUB_SHA"

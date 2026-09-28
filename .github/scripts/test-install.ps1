@@ -85,18 +85,34 @@ function Remove-TestPackage {
 
 # ---------- actions ----------
 
-function Invoke-Setup([string]$exe, [string]$appInstaller) {
+function Invoke-Setup([string]$exe, [string]$appInstaller, [switch]$Fallback) {
     $log = Join-Path $work "setup-$([guid]::NewGuid().ToString('N')).log"
     $argList = @('--quiet', '--log', "`"$log`"")
     if ($appInstaller) { $argList += @('--appinstaller', "`"$appInstaller`"") }
+    if ($Fallback) { $argList += '--test-fallback' }
     $p = Start-Process $exe -ArgumentList $argList -Wait -PassThru
-    if (Test-Path $log) { Get-Content $log -Encoding utf8 | ForEach-Object { Report INFO "setup: $_" } }
+    $script:SetupLog = if (Test-Path $log) { @(Get-Content $log -Encoding utf8) } else { @() }
+    $script:SetupLog | ForEach-Object { Report INFO "setup: $_" }
     $p.ExitCode
 }
 
-# Applies an update the way App Installer does: from the .appinstaller URI stored in the installed package.
-function Update-FromStoredUri($pkg) {
-    Add-AppxPackage -Path (Get-UpdateUri $pkg) -AppInstallerFile -ForceTargetApplicationShutdown
+# The widget's own updater (SelfUpdater), taken from inside a release package: the provider exe run as
+# "--update <feed>" does exactly what the widget does in the background, and works outside the package.
+function Get-Updater([string]$msix) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $dir = Join-Path $work "updater-$([guid]::NewGuid().ToString('N'))"
+    [IO.Compression.ZipFile]::ExtractToDirectory($msix, $dir)
+    Join-Path $dir 'NetFreeBoardWidgetProvider\NetFreeBoardWidgetProvider.exe'
+}
+
+function Invoke-Updater([string]$exe, [string]$feed) {
+    $widgetLog = Join-Path $env:APPDATA 'NetFreeWidget\error_log.txt'
+    $before = if (Test-Path $widgetLog) { @(Get-Content $widgetLog -Encoding utf8).Count } else { 0 }
+    $p = Start-Process $exe -ArgumentList @('--update', "`"$feed`"") -Wait -PassThru
+    if (Test-Path $widgetLog) {
+        Get-Content $widgetLog -Encoding utf8 | Select-Object -Skip $before | ForEach-Object { Report INFO "widget: $_" }
+    }
+    $p.ExitCode
 }
 
 # GitHub redirects release downloads to signed storage URLs that refuse HEAD, so request a GET and stop at the headers.
@@ -172,6 +188,17 @@ function Invoke-LocalTests {
     Check 'installer re-run exits with 0' ($code -eq 0) "exit code $code"
     Check 'installer re-run keeps the version' ((Get-PackageVersion (Get-Package)) -eq $Version)
 
+    # 2b. The fallback for networks where App Installer cannot download (NetFree): the installer downloads
+    #     the files itself and installs from a local .appinstaller, still registered to the feed.
+    Remove-TestPackage
+    $code = Invoke-Setup $setup $manifestUrl -Fallback
+    Check 'fallback install exits with 0' ($code -eq 0) "exit code $code"
+    Check 'fallback install used the downloaded files' (($script:SetupLog -join "`n") -like '*installed from downloaded files*')
+    Check 'fallback install did not need the last resort' (($script:SetupLog -join "`n") -notlike '*local .appinstaller:*')
+    $pkg = Get-Package
+    Check "fallback install is version $Version" ((Get-PackageVersion $pkg) -eq $Version) (Get-PackageVersion $pkg)
+    Check 'fallback install is registered to the feed' ((Get-UpdateUri $pkg) -eq $manifestUrl) (Get-UpdateUri $pkg)
+
     # 3. A newer version appears in the feed, signed with the same certificate.
     $v = [Version]$Version
     $next = "$($v.Major).$($v.Minor).$($v.Build).$($v.Revision + 1)"
@@ -198,11 +225,16 @@ function Invoke-LocalTests {
     $avail = Get-UpdateAvailability (Get-Package)
     Check 'Windows sees the new version as an available update' ($avail -like 'Available*' -or $avail -like 'Required*') $avail
 
-    Update-FromStoredUri (Get-Package)
+    # The widget's own updater, which does not depend on App Installer's download.
+    $updater = Get-Updater (Join-Path $feed $msixName)
+    $code = Invoke-Updater $updater $manifestUrl
+    Check 'widget updater exits with 0 (updated)' ($code -eq 0) "exit code $code"
     $pkg = Get-Package
     Check "updated in place to $next" ((Get-PackageVersion $pkg) -eq $next) (Get-PackageVersion $pkg)
     Check 'still registered for automatic updates after the update' ((Get-UpdateUri $pkg) -eq $manifestUrl) (Get-UpdateUri $pkg)
     Check 'no update reported after updating' ((Get-UpdateAvailability $pkg) -like 'NoUpdates*')
+    $code = Invoke-Updater $updater $manifestUrl
+    Check 'widget updater reports up to date (10)' ($code -eq 10) "exit code $code"
 
     Remove-TestPackage
 }
@@ -252,8 +284,14 @@ function Invoke-RemoteTests {
             # update below, through the stored URI, is what proves the upgrade path; the Local tests cover
             # the availability check on a feed that matches the install source.
             Report INFO "update availability of the previous release: $(Get-UpdateAvailability $pkg)"
-            Update-FromStoredUri $pkg
-            Check "previous release updates to $Version" ((Get-PackageVersion (Get-Package)) -eq $Version) (Get-PackageVersion (Get-Package))
+            # The widget's own updater over the real HTTPS URLs (the path that works on NetFree).
+            $msix = Join-Path $work (Split-Path $xml.AppInstaller.MainPackage.Uri -Leaf)
+            Invoke-WebRequest $xml.AppInstaller.MainPackage.Uri -OutFile $msix -UseBasicParsing
+            $code = Invoke-Updater (Get-Updater $msix) $manifestUrl
+            Check 'widget updater exits with 0 (updated)' ($code -eq 0) "exit code $code"
+            $pkg = Get-Package
+            Check "previous release updates to $Version" ((Get-PackageVersion $pkg) -eq $Version) (Get-PackageVersion $pkg)
+            Check 'still registered to latest/download after the update' ((Get-UpdateUri $pkg) -eq $manifestUrl) (Get-UpdateUri $pkg)
         }
         Remove-TestPackage
     }
