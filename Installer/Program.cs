@@ -67,8 +67,10 @@ namespace WidgetSetup
                     return ExitCertFailed;
 
                 Log($"installing from {config.AppInstallerUri}");
-                var (ok, output) = SetupSteps.InstallPackage(config.AppInstallerUri);
-                Log(ok ? "installed" : "install failed: " + output);
+                var (ok, autoUpdates, output) = SetupSteps.InstallPackage(config.AppInstallerUri);
+                Log(!ok ? "install failed: " + output
+                    : autoUpdates ? "installed"
+                    : "installed from downloaded files, without automatic updates: " + output);
                 return ok ? ExitOk : ExitInstallFailed;
             }
             catch (Exception ex)
@@ -120,7 +122,7 @@ namespace WidgetSetup
             return new X509Certificate2(buffer.ToArray());
         }
 
-        private static Stream Resource(string name) =>
+        public static Stream Resource(string name) =>
             Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
             ?? throw new InvalidOperationException($"Missing embedded resource '{name}'.");
     }
