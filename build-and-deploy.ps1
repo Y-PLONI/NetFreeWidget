@@ -65,6 +65,16 @@ if (-not (Test-Path $manifestPath)) {
 
 # Use Add-AppxPackage to install unpacked layout
 try {
+    # Registering the same version from another folder (e.g. Debug vs Release) silently keeps the old one.
+    $layoutDir = (Resolve-Path (Split-Path $manifestPath)).Path
+    $existing = Get-AppxPackage NetFreeWidget
+    if ($existing -and $existing.InstallLocation -ne $layoutDir) {
+        Write-Host "♻️ Removing package registered from $($existing.InstallLocation)" -ForegroundColor Yellow
+        Get-Process NetFreeBoardWidgetProvider -ErrorAction SilentlyContinue | Stop-Process -Force
+        Remove-AppxPackage $existing.PackageFullName
+    }
+
+
     Add-AppxPackage -Register $manifestPath
     Write-Host "✅ Package deployed successfully!" -ForegroundColor Green
     Write-Host ""
