@@ -247,8 +247,11 @@ function Invoke-RemoteTests {
         $pkg = Get-Package
         if ($pkg) {
             Check 'previous release is registered to latest/download' ((Get-UpdateUri $pkg) -eq $manifestUrl) (Get-UpdateUri $pkg)
-            $avail = Get-UpdateAvailability $pkg
-            Check 'Windows sees this release as an update of the previous one' ($avail -like 'Available*' -or $avail -like 'Required*') $avail
+            # Informational only: the previous release was installed from its tag URL, not from latest/download
+            # as a real user's was, and Windows then answers NoUpdates (seen on the 1.0.5 -> 1.0.6 run). The
+            # update below, through the stored URI, is what proves the upgrade path; the Local tests cover
+            # the availability check on a feed that matches the install source.
+            Report INFO "update availability of the previous release: $(Get-UpdateAvailability $pkg)"
             Update-FromStoredUri $pkg
             Check "previous release updates to $Version" ((Get-PackageVersion (Get-Package)) -eq $Version) (Get-PackageVersion (Get-Package))
         }
