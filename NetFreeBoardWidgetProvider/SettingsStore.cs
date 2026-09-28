@@ -41,5 +41,20 @@ namespace NetFreeBoardWidgetProvider
                 return _cached ??= new WidgetSettings();
             }
         }
+
+        public static void Save(WidgetSettings settings)
+        {
+            lock (Gate)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+                string tmp = SettingsPath + ".tmp";
+                using (var stream = File.Create(tmp))
+                    JsonSerializer.Serialize(stream, settings, SettingsJsonContext.Default.WidgetSettings);
+                File.Move(tmp, SettingsPath, overwrite: true);
+
+                _cached = settings;
+                _cachedWriteTime = File.GetLastWriteTimeUtc(SettingsPath);
+            }
+        }
     }
 }

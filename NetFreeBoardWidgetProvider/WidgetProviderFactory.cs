@@ -19,8 +19,8 @@ namespace NetFreeBoardWidgetProvider
 
             if (riid == typeof(Microsoft.Windows.Widgets.Providers.IWidgetProvider).GUID || riid == Guid.Parse("00000000-0000-0000-C000-000000000046"))
             {
-                var provider = new WidgetProvider();
-                ppvObject = Marshal.GetComInterfaceForObject(provider, typeof(Microsoft.Windows.Widgets.Providers.IWidgetProvider));
+                // A CsWinRT CCW answers QueryInterface for every projected interface, including IWidgetProvider2.
+                ppvObject = WinRT.MarshalInspectable<Microsoft.Windows.Widgets.Providers.IWidgetProvider>.FromManaged(new WidgetProvider());
             }
 
             return ppvObject != IntPtr.Zero ? 0 : unchecked((int)0x80004002);
