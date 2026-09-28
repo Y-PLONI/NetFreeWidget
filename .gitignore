@@ -117,3 +117,7 @@ TestResults/
 # Extracted packages / build caches
 msix_extracted/
 *.assets.cache
+
+# Signing: the private key lives only in GitHub secrets; CI exports the public part for the installer
+*.pfx
+Installer/signing.cer

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    First-time installer: trusts the sideload signing certificate, then installs the widget from its
+    .appinstaller URL so Windows keeps it updated. .NET Framework 4.8 ships with Windows 10/11, so the
+    result is a single small exe with nothing to install first.
+    Generic by design: another widget only needs its own setup.ini (and the same signing.cer).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>NetFreeWidget-Setup</AssemblyName>
+    <RootNamespace>WidgetSetup</RootNamespace>
+    <ApplicationIcon>Setup.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="setup.ini" LogicalName="setup.ini" />
+    <!-- Public part of the signing certificate; CI exports it from the signing secret before building. -->
+    <EmbeddedResource Include="signing.cer" LogicalName="signing.cer" Condition="Exists('signing.cer')" />
+  </ItemGroup>
+
+</Project>

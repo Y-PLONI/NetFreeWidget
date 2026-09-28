@@ -9,12 +9,12 @@
 
   <Identity
     Name="NetFreeWidget"
-    Publisher="CN=YourPublisher"
+    Publisher="CN=Y-PLONI"
     Version="1.0.0.0" />
 
   <Properties>
     <DisplayName>גלישה - נטפרי</DisplayName>
-    <PublisherDisplayName>Your Name</PublisherDisplayName>
+    <PublisherDisplayName>Y-PLONI</PublisherDisplayName>
     <Logo>ProviderAssets\StoreLogo.png</Logo>
   </Properties>
 

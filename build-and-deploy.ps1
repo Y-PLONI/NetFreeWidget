@@ -79,9 +79,11 @@ try {
 
     # Registering the same version from another folder silently keeps the old one, so remove it first.
     # Files a packaged app creates under AppData live in the package's private folder and die with it: keep a copy.
+    # A changed Publisher is a different package identity, so it must go too.
+    $publisher = ([xml](Get-Content (Join-Path $packageRoot 'Package.appxmanifest') -Raw)).Package.Identity.Publisher
     $existing = Get-AppxPackage NetFreeWidget
     $backup = $null
-    if ($existing -and $existing.InstallLocation -ne $layoutDir) {
+    if ($existing -and ($existing.InstallLocation -ne $layoutDir -or $existing.Publisher -ne $publisher)) {
         $dataDir = Join-Path $env:LOCALAPPDATA "Packages\$($existing.PackageFamilyName)\LocalCache\Roaming\NetFreeWidget"
         if (Test-Path $dataDir) {
             $backup = Join-Path ([IO.Path]::GetTempPath()) "NetFreeWidget-data-$([guid]::NewGuid().ToString('N'))"
