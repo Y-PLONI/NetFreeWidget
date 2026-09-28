@@ -1,0 +1,159 @@
+name: Build & Release MSIX
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      CONFIGURATION: Release
+      PLATFORM: x64
+      VERSION: 1.0.${{ github.run_number }}.0
+      TAG: v1.0.${{ github.run_number }}
+      MANIFEST: NetFreeBoardWidgetPackage/Package.appxmanifest
+      PKG_DIR: ${{ github.workspace }}\AppPackages
+      OUT_DIR: ${{ github.workspace }}\release-out
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set package version and read Publisher
+        id: manifest
+        run: |
+          $path = $env:MANIFEST
+          $text = Get-Content $path -Raw -Encoding utf8
+          $regex = [regex]'(<Identity\b[^>]*?\bVersion=")[^"]*(")'
+          if (-not $regex.IsMatch($text)) { throw "Identity Version not found in $path" }
+          $text = $regex.Replace($text, "`${1}$env:VERSION`${2}", 1)
+          Set-Content $path $text -Encoding utf8 -NoNewline
+
+          $xml = [xml]$text
+          $publisher = $xml.Package.Identity.Publisher
+          if (-not $publisher) { throw "Identity Publisher not found in $path" }
+          Write-Host "Version:   $($xml.Package.Identity.Version)"
+          Write-Host "Publisher: $publisher"
+          "publisher=$publisher" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: msbuild NetFreeWidget.sln /t:Restore /p:Configuration=$env:CONFIGURATION /p:Platform=$env:PLATFORM /v:minimal
+
+      - name: Build MSIX
+        run: >
+          msbuild NetFreeWidget.sln
+          /p:Configuration=$env:CONFIGURATION
+          /p:Platform=$env:PLATFORM
+          /p:AppxBundle=Never
+          /p:UapAppxPackageBuildMode=SideloadOnly
+          /p:GenerateAppxPackageOnBuild=true
+          /p:AppxPackageSigningEnabled=false
+          /p:AppxPackageDir=$env:PKG_DIR\
+          /v:minimal
+
+      - name: Collect package files
+        id: collect
+        run: |
+          $msix = Get-ChildItem $env:PKG_DIR -Recurse -Filter *.msix |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Select-Object -First 1
+          if (-not $msix) { throw "No .msix produced under $env:PKG_DIR" }
+
+          New-Item -ItemType Directory -Force $env:OUT_DIR | Out-Null
+          $target = Join-Path $env:OUT_DIR "NetFreeWidget_$($env:VERSION)_$($env:PLATFORM).msix"
+          Copy-Item $msix.FullName $target
+          "msix=$target" >> $env:GITHUB_OUTPUT
+
+          # Framework dependencies (Windows App Runtime) for the target platform, if generated.
+          $deps = Get-ChildItem $env:PKG_DIR -Recurse -Include *.msix, *.appx |
+            Where-Object { $_.FullName -match "\\Dependencies\\$($env:PLATFORM)\\" }
+          foreach ($d in $deps) {
+            Copy-Item $d.FullName (Join-Path $env:OUT_DIR "Dependency_$($d.Name)")
+          }
+
+          Copy-Item .github/release/install.ps1 $env:OUT_DIR
+          Get-ChildItem $env:OUT_DIR | Format-Table Name, Length
+
+      - name: Create self-signed certificate and sign
+        env:
+          PUBLISHER: ${{ steps.manifest.outputs.publisher }}
+          MSIX: ${{ steps.collect.outputs.msix }}
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom `
+            -Subject $env:PUBLISHER `
+            -KeyUsage DigitalSignature `
+            -FriendlyName 'NetFreeWidget sideload' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -NotAfter (Get-Date).AddYears(5) `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+
+          $pwdPlain = [guid]::NewGuid().ToString('N')
+          $securePwd = ConvertTo-SecureString $pwdPlain -AsPlainText -Force
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $securePwd | Out-Null
+          Export-Certificate -Cert $cert -FilePath (Join-Path $env:OUT_DIR 'NetFreeWidget.cer') | Out-Null
+
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found' }
+          Write-Host "signtool: $($signtool.FullName)"
+
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $pwdPlain $env:MSIX
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
+
+          Remove-Item $pfx -Force
+          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+
+      - name: Write release notes
+        run: |
+          $msg = git log -1 --pretty=format:%B
+          $notes = @(
+            "## גרסה $env:VERSION"
+            ''
+            '### שינויים'
+            $msg
+            ''
+            '### התקנה'
+            '1. להוריד את כל הקבצים לאותה תיקייה.'
+            '2. להריץ PowerShell כמנהל: `powershell -ExecutionPolicy Bypass -File .\install.ps1`'
+            ''
+            'הסקריפט מתקין את התעודה `NetFreeWidget.cer` ל-LocalMachine\TrustedPeople ואז את חבילת ה-MSIX.'
+            ''
+            "Commit: $env:GITHUB_SHA"
+          )
+          $notes -join "`n" | Set-Content (Join-Path $env:RUNNER_TEMP 'notes.md') -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: גרסה ${{ env.TAG }}
+          body_path: ${{ runner.temp }}/notes.md
+          files: release-out/*
+          fail_on_unmatched_files: true
