@@ -64,6 +64,10 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003">
       <IncludeAssets>build</IncludeAssets>
     </PackageReference>
+    <!-- Transitive dependency of WindowsAppSDK; a widget provider never uses WebView2. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2651.64">
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.targets" />
 </Project>
