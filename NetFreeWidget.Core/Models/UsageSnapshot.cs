@@ -7,6 +7,9 @@ namespace NetFreeWidget.Core.Models
         public bool IsOverLimit { get; set; }
         public bool IsError { get; set; }
 
+        /// <summary>The current connection has no metered package (NetFree reports no monthly usage).</summary>
+        public bool IsNoPackage { get; set; }
+
         /// <summary>The reset day is only known as a range and the verdict differs across it.</summary>
         public bool IsUncertain { get; set; }
 

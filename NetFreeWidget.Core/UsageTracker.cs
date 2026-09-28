@@ -40,28 +40,30 @@ namespace NetFreeWidget.Core
         private const int MaxResets = 12;
         private const int MaxCovered = 120;
 
-        private static readonly string StatePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NetFreeWidget", "tracking.json");
+        private static readonly string StateDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NetFreeWidget");
 
         private static readonly object Gate = new();
-        private static TrackingState? _state;
 
-        /// <summary>Feeds one successful usage reading into the tracker and persists it.</summary>
-        public static void Record(DateTime now, double usageGb)
+        // One history per NetFree account: another network's lower usage must not look like a reset.
+        private static readonly Dictionary<long, TrackingState> States = new();
+
+        /// <summary>Feeds one successful usage reading of <paramref name="userId"/> into the tracker and persists it.</summary>
+        public static void Record(long userId, DateTime now, double usageGb)
         {
             lock (Gate)
             {
-                var s = State();
+                var s = State(userId);
                 if (Apply(s, now, usageGb))
-                    Save(s);
+                    Save(userId, s);
             }
         }
 
-        /// <summary>Days of the month (1-31) the package may reset on; all 31 when nothing is known yet.</summary>
-        public static List<int> GetCandidateDays()
+        /// <summary>Days of the month (1-31) the account's package may reset on; all 31 when nothing is known yet.</summary>
+        public static List<int> GetCandidateDays(long userId)
         {
             lock (Gate)
-                return GetCandidateDays(State());
+                return GetCandidateDays(State(userId));
         }
 
         /// <summary>Adds one reading to <paramref name="s"/>; returns false when it taught nothing.</summary>
@@ -150,17 +152,21 @@ namespace NetFreeWidget.Core
             return false;
         }
 
-        private static TrackingState State()
-        {
-            if (_state != null)
-                return _state;
+        private static string StatePath(long userId) => Path.Combine(StateDir, $"tracking-{userId}.json");
 
+        private static TrackingState State(long userId)
+        {
+            if (States.TryGetValue(userId, out var cached))
+                return cached;
+
+            TrackingState? state = null;
             try
             {
-                if (File.Exists(StatePath))
+                string path = StatePath(userId);
+                if (File.Exists(path))
                 {
-                    using var stream = File.OpenRead(StatePath);
-                    _state = JsonSerializer.Deserialize(stream, TrackingJsonContext.Default.TrackingState);
+                    using var stream = File.OpenRead(path);
+                    state = JsonSerializer.Deserialize(stream, TrackingJsonContext.Default.TrackingState);
                 }
             }
             catch (Exception ex)
@@ -168,18 +174,19 @@ namespace NetFreeWidget.Core
                 Log.Error("UsageTracker", ex);
             }
 
-            return _state ??= new TrackingState();
+            return States[userId] = state ?? new TrackingState();
         }
 
-        private static void Save(TrackingState s)
+        private static void Save(long userId, TrackingState s)
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
-                string tmp = StatePath + ".tmp";
+                Directory.CreateDirectory(StateDir);
+                string path = StatePath(userId);
+                string tmp = path + ".tmp";
                 using (var stream = File.Create(tmp))
                     JsonSerializer.Serialize(stream, s, TrackingJsonContext.Default.TrackingState);
-                File.Move(tmp, StatePath, overwrite: true);
+                File.Move(tmp, path, overwrite: true);
             }
             catch (Exception ex)
             {

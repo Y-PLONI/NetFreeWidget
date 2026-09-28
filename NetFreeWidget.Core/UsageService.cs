@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.NetworkInformation;
 using System.Threading.Tasks;
 using NetFreeWidget.Core.Models;
 
@@ -16,17 +17,36 @@ namespace NetFreeWidget.Core
         private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
 
         private static readonly object Gate = new();
-        private static Task<double>? _inflight;
-        private static double _lastUsage = double.NaN;
+        private static Task<UsageReading>? _inflight;
+        private static UsageReading _last = UsageReading.Error;
         private static long _lastFetchTick;
         private static int _failStreak;
+
+        static UsageService()
+        {
+            // A new network may be a different NetFree account: drop the cached reading and any backoff.
+            NetworkChange.NetworkAddressChanged += (_, _) =>
+            {
+                lock (Gate)
+                {
+                    _lastFetchTick = 0;
+                    _failStreak = 0;
+                }
+            };
+        }
+
+        /// <summary>The account of the latest successful reading (0 when none yet).</summary>
+        public static long LastUserId
+        {
+            get { lock (Gate) return _last.UserId; }
+        }
 
         /// <summary>
         /// Returns the current usage, sharing one in-flight request between all callers and caching the
         /// result (10 min on success, 30s doubling up to 15 min on failure). <paramref name="force"/> bypasses
         /// the cache but still waits at least 10 seconds between requests.
         /// </summary>
-        public static Task<double> GetUsageGbAsync(bool force = false)
+        public static Task<UsageReading> GetUsageAsync(bool force = false)
         {
             lock (Gate)
             {
@@ -36,33 +56,34 @@ namespace NetFreeWidget.Core
                 if (_lastFetchTick != 0)
                 {
                     var age = TimeSpan.FromMilliseconds(Environment.TickCount64 - _lastFetchTick);
-                    var ttl = double.IsNaN(_lastUsage)
+                    var ttl = _last.IsError
                         ? TimeSpan.FromSeconds(Math.Min(30 << Math.Min(_failStreak - 1, 5), MaxBackoff.TotalSeconds))
                         : SuccessTtl;
                     if (age < (force ? ForceFloor : ttl))
-                        return Task.FromResult(_lastUsage);
+                        return Task.FromResult(_last);
                 }
 
                 return _inflight = FetchAndStoreAsync();
             }
         }
 
-        private static async Task<double> FetchAndStoreAsync()
+        private static async Task<UsageReading> FetchAndStoreAsync()
         {
-            double usage = double.NaN;
+            var reading = UsageReading.Error;
             try
             {
-                usage = await NetFreeApi.GetUsageGb().ConfigureAwait(false);
-                UsageTracker.Record(DateTime.Now, usage);
-                return usage;
+                reading = await NetFreeApi.GetUsageAsync().ConfigureAwait(false);
+                if (!double.IsNaN(reading.Gb))
+                    UsageTracker.Record(reading.UserId, DateTime.Now, reading.Gb);
+                return reading;
             }
             finally
             {
                 lock (Gate)
                 {
-                    _lastUsage = usage;
+                    _last = reading;
                     _lastFetchTick = Environment.TickCount64;
-                    _failStreak = double.IsNaN(usage) ? _failStreak + 1 : 0;
+                    _failStreak = reading.IsError ? _failStreak + 1 : 0;
                     _inflight = null;
                 }
             }
@@ -70,16 +91,27 @@ namespace NetFreeWidget.Core
 
         public static async Task<UsageSnapshot> GetSnapshotAsync(WidgetSettings settings, bool force = false)
         {
-            return BuildSnapshot(await GetUsageGbAsync(force).ConfigureAwait(false), settings);
+            return BuildSnapshot(await GetUsageAsync(force).ConfigureAwait(false), settings);
         }
 
         // Beyond this spread of possible reset days a "range" says nothing useful.
         private const int MaxUsefulCandidates = 10;
 
-        public static UsageSnapshot BuildSnapshot(double currentUsageGb, WidgetSettings settings)
+        public static UsageSnapshot BuildSnapshot(UsageReading reading, WidgetSettings settings)
         {
-            var learned = settings.EffectiveCycleDay() == 0 ? UsageTracker.GetCandidateDays() : null;
-            return BuildSnapshot(currentUsageGb, settings, DateTime.Now, learned);
+            if (reading.NoPackage)
+            {
+                return new UsageSnapshot
+                {
+                    IsNoPackage = true,
+                    IsPending = true,
+                    TotalGb = settings.PackageQuotaGb,
+                    StatusText = "אין חבילת גלישה מוגבלת בחיבור הזה"
+                };
+            }
+
+            var learned = settings.EffectiveCycleDay() == 0 ? UsageTracker.GetCandidateDays(reading.UserId) : null;
+            return BuildSnapshot(reading.Gb, settings, DateTime.Now, learned);
         }
 
         /// <param name="learnedDays">Possible reset days from the tracker; used only when no day is configured.</param>

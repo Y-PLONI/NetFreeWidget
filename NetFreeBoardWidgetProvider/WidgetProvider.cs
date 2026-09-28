@@ -417,7 +417,7 @@ namespace NetFreeBoardWidgetProvider
         private static string BuildSettingsForm(WidgetSettings settings, string error)
         {
             int cycleDay = settings.EffectiveCycleDay();
-            var detected = cycleDay == 0 ? UsageTracker.GetCandidateDays() : null;
+            var detected = cycleDay == 0 ? UsageTracker.GetCandidateDays(UsageService.LastUserId) : null;
 
             using var buffer = new MemoryStream(4096);
             using (var w = new Utf8JsonWriter(buffer))
@@ -547,7 +547,7 @@ namespace NetFreeBoardWidgetProvider
             using (var writer = new Utf8JsonWriter(buffer))
             {
                 writer.WriteStartObject();
-                writer.WriteString("used", snapshot.UsedGb.ToString("F2", CultureInfo.InvariantCulture));
+                writer.WriteString("used", snapshot.IsNoPackage ? "—" : snapshot.UsedGb.ToString("F2", CultureInfo.InvariantCulture));
                 writer.WriteString("total", snapshot.TotalGb.ToString("F1", CultureInfo.InvariantCulture));
                 writer.WriteString("expected", snapshot.ExpectedText);
                 writer.WriteBoolean("hasExpected", snapshot.ExpectedText.Length > 0);
