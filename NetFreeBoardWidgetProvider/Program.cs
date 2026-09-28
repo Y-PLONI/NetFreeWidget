@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using NetFreeWidget.Core;
 
 namespace NetFreeBoardWidgetProvider
 {
@@ -27,10 +28,12 @@ namespace NetFreeBoardWidgetProvider
 
         static uint _cookie = 0;
 
+        /// <summary>Set when the last widget is deleted; Windows relaunches the COM server when a widget is added again.</summary>
+        internal static readonly ManualResetEvent ExitEvent = new(false);
+
         static void Main(string[] args)
         {
-            System.Console.WriteLine("Began Main execution!!!");
-            try 
+            try
             {
                 var widgetProviderFactory = new WidgetProviderFactory();
                 Guid clsid = new Guid(WidgetProvider.WidgetProviderClassId);
@@ -45,33 +48,18 @@ namespace NetFreeBoardWidgetProvider
                 if (hr == S_OK)
                 {
                     CoResumeClassObjects();
-                    var resetEvent = new ManualResetEvent(false);
-                    var thread = new Thread(() =>
-                    {
-                        resetEvent.WaitOne();
-                    });
-                    thread.Start();
-
-                    resetEvent.WaitOne();
+                    ExitEvent.WaitOne();
+                    CoRevokeClassObject(_cookie);
                 }
                 else
                 {
-                    Log($"CoRegisterClassObject failed with HR: {hr}");
+                    Log.Error("Program", $"CoRegisterClassObject failed with HR: {hr}");
                 }
             }
             catch (Exception ex)
             {
-                Log($"Main Error: {ex}");
+                Log.Error("Program", ex);
             }
-        }
-
-        static void Log(string message) 
-        {
-            try {
-                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NetFreeWidget", "error_log.txt");
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath)!);
-                System.IO.File.AppendAllText(logPath, $"[{DateTime.Now}] Program: {message}\n");
-            } catch {}
         }
     }
 }

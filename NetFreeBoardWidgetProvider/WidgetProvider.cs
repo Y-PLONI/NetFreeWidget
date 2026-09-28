@@ -1,5 +1,9 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Windows.Widgets.Providers;
 using Microsoft.Windows.Widgets;
@@ -11,57 +15,73 @@ namespace NetFreeBoardWidgetProvider
     internal class WidgetProvider : IWidgetProvider
     {
         public const string WidgetProviderClassId = "E7B3C2A1-4F5D-4A8B-9C3E-1D2F3A4B5C6D";
-        
-        private static readonly Dictionary<string, string> ActiveWidgets = new();
+
+        // Accessed from concurrent COM threads.
+        private static readonly ConcurrentDictionary<string, WidgetSize> ActiveWidgets = new();
+
+        /// <summary>Picks up widgets that already exist when Windows relaunches the provider (runs on first activation).</summary>
+        static WidgetProvider()
+        {
+            try
+            {
+                foreach (var info in WidgetManager.GetDefault().GetWidgetInfos())
+                    ActiveWidgets[info.WidgetContext.Id] = info.WidgetContext.Size;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("WidgetProvider", ex);
+            }
+        }
 
         public void CreateWidget(WidgetContext widgetContext)
         {
-            ActiveWidgets[widgetContext.Id] = widgetContext.DefinitionId;
-            _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.DefinitionId, WidgetSize.Medium);
+            ActiveWidgets[widgetContext.Id] = widgetContext.Size;
+            _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.Size, force: false);
         }
 
         public void DeleteWidget(string widgetId, string customState)
         {
-            ActiveWidgets.Remove(widgetId);
+            ActiveWidgets.TryRemove(widgetId, out _);
+            if (ActiveWidgets.IsEmpty)
+                Program.ExitEvent.Set();
         }
 
         public void Activate(WidgetContext widgetContext)
         {
-            var size = widgetContext.Size;
-            _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.DefinitionId, size);
+            ActiveWidgets[widgetContext.Id] = widgetContext.Size;
+            _ = UpdateWidgetAsync(widgetContext.Id, widgetContext.Size, force: false);
         }
 
         public void Deactivate(string widgetId)
         {
+            // Nothing runs in the background, so there is nothing to pause.
         }
 
         public void OnActionInvoked(WidgetActionInvokedArgs args)
         {
             if (args.Verb == "refresh")
             {
-                _ = UpdateWidgetAsync(args.WidgetContext.Id, args.WidgetContext.DefinitionId, args.WidgetContext.Size);
+                _ = UpdateWidgetAsync(args.WidgetContext.Id, args.WidgetContext.Size, force: true);
             }
         }
 
         public void OnWidgetContextChanged(WidgetContextChangedArgs args)
         {
-            _ = UpdateWidgetAsync(args.WidgetContext.Id, args.WidgetContext.DefinitionId, args.WidgetContext.Size);
+            ActiveWidgets[args.WidgetContext.Id] = args.WidgetContext.Size;
+            _ = UpdateWidgetAsync(args.WidgetContext.Id, args.WidgetContext.Size, force: false);
         }
 
-        private async Task UpdateWidgetAsync(string widgetId, string definitionId, WidgetSize size)
+        private static async Task UpdateWidgetAsync(string widgetId, WidgetSize size, bool force)
         {
             try
             {
-                var settings = SettingsStore.Load();
-                var snapshot = await UsageService.GetSnapshotAsync(settings);
-
-                string template = GetTemplateForSize(size);
-                string data = BuildDataJson(snapshot);
+                // All widgets share one cached fetch, so a board open or resize usually costs no network.
+                var snapshot = await UsageService.GetSnapshotAsync(SettingsStore.Load(), force).ConfigureAwait(false);
 
                 var options = new WidgetUpdateRequestOptions(widgetId)
                 {
-                    Template = template,
-                    Data = data,
+                    Template = GetTemplateForSize(size),
+                    Data = BuildDataJson(snapshot),
                     CustomState = ""
                 };
 
@@ -69,17 +89,11 @@ namespace NetFreeBoardWidgetProvider
             }
             catch (Exception ex)
             {
-                try 
-                {
-                    string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NetFreeWidget", "error_log.txt");
-                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath)!);
-                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now}] WidgetProvider Error:\n{ex}\n");
-                } 
-                catch {}
+                Log.Error("WidgetProvider", ex);
             }
         }
 
-        private string GetTemplateForSize(WidgetSize size)
+        private static string GetTemplateForSize(WidgetSize size)
         {
             if (size == WidgetSize.Small)
             {
@@ -251,23 +265,26 @@ namespace NetFreeBoardWidgetProvider
             }
         }
 
-        private string BuildDataJson(UsageSnapshot snapshot)
+        private static string BuildDataJson(UsageSnapshot snapshot)
         {
-            string statusColor = snapshot.IsOverLimit ? "Attention" : "Good";
+            string statusColor = snapshot.IsError ? "Warning" : snapshot.IsOverLimit ? "Attention" : "Good";
             string exhaustion = snapshot.ExhaustionText ?? "";
-            bool hasExhaustion = !string.IsNullOrEmpty(exhaustion);
 
-            return $$"""
+            // Utf8JsonWriter escapes the strings; invariant formatting keeps "." as the decimal separator.
+            using var buffer = new MemoryStream(256);
+            using (var writer = new Utf8JsonWriter(buffer))
             {
-              "used": "{{snapshot.UsedGb:F2}}",
-              "total": "{{snapshot.TotalGb:F1}}",
-              "expected": "{{snapshot.ExpectedGb:F2}}",
-              "status": "{{snapshot.StatusText}}",
-              "statusColor": "{{statusColor}}",
-              "exhaustion": "{{exhaustion}}",
-              "hasExhaustion": {{hasExhaustion.ToString().ToLower()}}
+                writer.WriteStartObject();
+                writer.WriteString("used", snapshot.UsedGb.ToString("F2", CultureInfo.InvariantCulture));
+                writer.WriteString("total", snapshot.TotalGb.ToString("F1", CultureInfo.InvariantCulture));
+                writer.WriteString("expected", snapshot.ExpectedGb.ToString("F2", CultureInfo.InvariantCulture));
+                writer.WriteString("status", snapshot.StatusText);
+                writer.WriteString("statusColor", statusColor);
+                writer.WriteString("exhaustion", exhaustion);
+                writer.WriteBoolean("hasExhaustion", exhaustion.Length > 0);
+                writer.WriteEndObject();
             }
-            """;
+            return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
         }
     }
 }
