@@ -57,29 +57,56 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "✅ Build succeeded" -ForegroundColor Green
 Write-Host ""
 
-# Deploy the unpacked package for testing without requiring a certificate
+# Deploy the unpacked package for testing without requiring a certificate.
+# The intermediate folder bin\<Platform>\<Configuration> holds only the manifest and the exe (no assets, no full
+# resources.pri), so the widget picker had no icon. Register an extracted copy of the built .msix instead.
 Write-Host "📦 Deploying Appx package..." -ForegroundColor Cyan
-$manifestPath = "NetFreeBoardWidgetPackage\bin\$Platform\$Configuration\AppxManifest.xml"
+$packageRoot = Join-Path $PSScriptRoot 'NetFreeBoardWidgetPackage'
+$msix = Get-ChildItem (Join-Path $packageRoot 'AppPackages') -Recurse -Filter "*_$Platform.msix" -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
 
-if (-not (Test-Path $manifestPath)) {
-    Write-Host "❌ AppxManifest.xml not found at: $manifestPath" -ForegroundColor Red
+if (-not $msix) {
+    Write-Host "❌ No .msix found under $packageRoot\AppPackages" -ForegroundColor Red
     exit 1
 }
 
-# Use Add-AppxPackage to install unpacked layout
+$layoutDir = Join-Path $packageRoot "bin\Layout\$Platform-$Configuration"
+
 try {
-    # Registering the same version from another folder (e.g. Debug vs Release) silently keeps the old one.
-    $layoutDir = (Resolve-Path (Split-Path $manifestPath)).Path
+    Get-Process NetFreeBoardWidgetProvider -ErrorAction SilentlyContinue | Stop-Process -Force
+
+    # Registering the same version from another folder silently keeps the old one, so remove it first.
+    # Files a packaged app creates under AppData live in the package's private folder and die with it: keep a copy.
     $existing = Get-AppxPackage NetFreeWidget
+    $backup = $null
     if ($existing -and $existing.InstallLocation -ne $layoutDir) {
+        $dataDir = Join-Path $env:LOCALAPPDATA "Packages\$($existing.PackageFamilyName)\LocalCache\Roaming\NetFreeWidget"
+        if (Test-Path $dataDir) {
+            $backup = Join-Path ([IO.Path]::GetTempPath()) "NetFreeWidget-data-$([guid]::NewGuid().ToString('N'))"
+            Copy-Item $dataDir $backup -Recurse
+        }
         Write-Host "♻️ Removing package registered from $($existing.InstallLocation)" -ForegroundColor Yellow
-        Get-Process NetFreeBoardWidgetProvider -ErrorAction SilentlyContinue | Stop-Process -Force
         Remove-AppxPackage $existing.PackageFullName
     }
 
+    if (Test-Path $layoutDir) { Remove-Item $layoutDir -Recurse -Force }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory($msix.FullName, $layoutDir)
 
-    Add-AppxPackage -Register $manifestPath
-    Write-Host "✅ Package deployed successfully!" -ForegroundColor Green
+    Add-AppxPackage -Register (Join-Path $layoutDir 'AppxManifest.xml') -ForceApplicationShutdown
+
+    if ($backup) {
+        $pfn = (Get-AppxPackage NetFreeWidget).PackageFamilyName
+        $target = Join-Path $env:LOCALAPPDATA "Packages\$pfn\LocalCache\Roaming"
+        New-Item -ItemType Directory -Force $target | Out-Null
+        Copy-Item $backup (Join-Path $target 'NetFreeWidget') -Recurse -Force
+        Remove-Item $backup -Recurse -Force
+        Write-Host "✅ Widget data restored" -ForegroundColor Green
+    }
+
+    Write-Host "✅ Package deployed successfully from $layoutDir" -ForegroundColor Green
     Write-Host ""
     Write-Host "🎉 Done! You can now:" -ForegroundColor Cyan
     Write-Host "   1. Press WIN + W to open Widgets Board" -ForegroundColor White
