@@ -29,6 +29,9 @@ jobs:
       MANIFEST: NetFreeBoardWidgetPackage/Package.appxmanifest
       PKG_DIR: ${{ github.workspace }}\AppPackages
       OUT_DIR: ${{ github.workspace }}\release-out
+      # Stable addresses: the installer and every installed copy look for updates at the latest release.
+      LATEST_URL: https://github.com/${{ github.repository }}/releases/latest/download
+      TAG_URL: https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}
 
     steps:
       - name: Checkout
@@ -42,8 +45,43 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      # One fixed certificate for every release (and every widget of this publisher): users trust it once,
+      # through the installer, and later updates install silently.
+      - name: Load signing certificate
+        id: cert
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          if (-not $env:SIGNING_PFX_BASE64 -or -not $env:SIGNING_PFX_PASSWORD) {
+            throw 'Secrets SIGNING_PFX_BASE64 / SIGNING_PFX_PASSWORD are not set for this repository.'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:SIGNING_PFX_PASSWORD)
+          Write-Host "Certificate: $($cert.Subject)  $($cert.Thumbprint)  until $($cert.NotAfter)"
+
+          # Public part: embedded in the installer and published for manual installs.
+          New-Item -ItemType Directory -Force $env:OUT_DIR | Out-Null
+          $cer = $cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          [IO.File]::WriteAllBytes('Installer/signing.cer', $cer)
+          [IO.File]::WriteAllBytes((Join-Path $env:OUT_DIR 'NetFreeWidget.cer'), $cer)
+
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found' }
+          Write-Host "signtool: $($signtool.FullName)"
+
+          "subject=$($cert.Subject)" >> $env:GITHUB_OUTPUT
+          "pfx=$pfx" >> $env:GITHUB_OUTPUT
+          "signtool=$($signtool.FullName)" >> $env:GITHUB_OUTPUT
+
       - name: Set package version and read Publisher
         id: manifest
+        env:
+          CERT_SUBJECT: ${{ steps.cert.outputs.subject }}
         run: |
           $path = $env:MANIFEST
           $text = Get-Content $path -Raw -Encoding utf8
@@ -55,9 +93,13 @@ jobs:
           $xml = [xml]$text
           $publisher = $xml.Package.Identity.Publisher
           if (-not $publisher) { throw "Identity Publisher not found in $path" }
+          if ($publisher -ne $env:CERT_SUBJECT) {
+            throw "Manifest Publisher '$publisher' must equal the certificate subject '$env:CERT_SUBJECT'."
+          }
           Write-Host "Version:   $($xml.Package.Identity.Version)"
           Write-Host "Publisher: $publisher"
           "publisher=$publisher" >> $env:GITHUB_OUTPUT
+          "name=$($xml.Package.Identity.Name)" >> $env:GITHUB_OUTPUT
 
       - name: Restore
         run: msbuild NetFreeWidget.sln /t:Restore /p:Configuration=$env:CONFIGURATION /p:Platform=$env:PLATFORM /v:minimal
@@ -74,6 +116,12 @@ jobs:
           /p:AppxPackageDir=$env:PKG_DIR\
           /v:minimal
 
+      - name: Build installer
+        run: |
+          dotnet build Installer/WidgetSetup.csproj -c Release -o "$env:RUNNER_TEMP\setup"
+          if ($LASTEXITCODE -ne 0) { throw "Installer build failed ($LASTEXITCODE)" }
+          Copy-Item "$env:RUNNER_TEMP\setup\NetFreeWidget-Setup.exe" $env:OUT_DIR
+
       - name: Collect package files
         id: collect
         run: |
@@ -82,52 +130,78 @@ jobs:
             Select-Object -First 1
           if (-not $msix) { throw "No .msix produced under $env:PKG_DIR" }
 
-          New-Item -ItemType Directory -Force $env:OUT_DIR | Out-Null
           $target = Join-Path $env:OUT_DIR "NetFreeWidget_$($env:VERSION)_$($env:PLATFORM).msix"
           Copy-Item $msix.FullName $target
           "msix=$target" >> $env:GITHUB_OUTPUT
 
-          # Framework dependencies (Windows App Runtime) for the target platform, if generated.
+          # Framework dependencies (Windows App Runtime, VCLibs) for the target platform, if generated.
           $deps = Get-ChildItem $env:PKG_DIR -Recurse -Include *.msix, *.appx |
             Where-Object { $_.FullName -match "\\Dependencies\\$($env:PLATFORM)\\" }
           foreach ($d in $deps) {
             Copy-Item $d.FullName (Join-Path $env:OUT_DIR "Dependency_$($d.Name)")
           }
 
+          # Offline fallback for machines that cannot reach the release URLs (no automatic updates).
           Copy-Item .github/scripts/install.ps1 $env:OUT_DIR
-          Get-ChildItem $env:OUT_DIR | Format-Table Name, Length
 
-      - name: Create self-signed certificate and sign
+      - name: Sign
         env:
-          PUBLISHER: ${{ steps.manifest.outputs.publisher }}
+          PFX: ${{ steps.cert.outputs.pfx }}
+          SIGNTOOL: ${{ steps.cert.outputs.signtool }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
           MSIX: ${{ steps.collect.outputs.msix }}
         run: |
-          $cert = New-SelfSignedCertificate -Type Custom `
-            -Subject $env:PUBLISHER `
-            -KeyUsage DigitalSignature `
-            -FriendlyName 'NetFreeWidget sideload' `
-            -CertStoreLocation 'Cert:\CurrentUser\My' `
-            -NotAfter (Get-Date).AddYears(5) `
-            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          # Timestamped, so packages stay installable after the certificate expires; retry on flaky servers.
+          $servers = 'http://timestamp.digicert.com', 'http://timestamp.sectigo.com', 'http://timestamp.globalsign.com/tsa/r6advanced1'
+          foreach ($file in $env:MSIX, (Join-Path $env:OUT_DIR 'NetFreeWidget-Setup.exe')) {
+            $signed = $false
+            foreach ($ts in $servers) {
+              & $env:SIGNTOOL sign /fd SHA256 /f $env:PFX /p $env:SIGNING_PFX_PASSWORD /tr $ts /td SHA256 $file
+              if ($LASTEXITCODE -eq 0) { $signed = $true; break }
+              Write-Host "Signing with timestamp server $ts failed; trying the next one."
+            }
+            if (-not $signed) { throw "signtool failed for $file" }
+          }
+          Remove-Item $env:PFX -Force
 
-          $pwdPlain = [guid]::NewGuid().ToString('N')
-          $securePwd = ConvertTo-SecureString $pwdPlain -AsPlainText -Force
-          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
-          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $securePwd | Out-Null
-          Export-Certificate -Cert $cert -FilePath (Join-Path $env:OUT_DIR 'NetFreeWidget.cer') | Out-Null
+      - name: Write .appinstaller
+        env:
+          PUBLISHER: ${{ steps.manifest.outputs.publisher }}
+          PACKAGE_NAME: ${{ steps.manifest.outputs.name }}
+          MSIX: ${{ steps.collect.outputs.msix }}
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          function Get-Identity($file) {
+            $zip = [IO.Compression.ZipFile]::OpenRead($file)
+            try {
+              $reader = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open())
+              return ([xml]$reader.ReadToEnd()).Package.Identity
+            }
+            finally { $zip.Dispose() }
+          }
+          function Esc($s) { [Security.SecurityElement]::Escape($s) }
 
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match '\\x64\\' } |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-          if (-not $signtool) { throw 'signtool.exe not found' }
-          Write-Host "signtool: $($signtool.FullName)"
+          $deps = foreach ($d in Get-ChildItem $env:OUT_DIR -Filter 'Dependency_*') {
+            $id = Get-Identity $d.FullName
+            "    <Package Name=""$(Esc $id.Name)"" Publisher=""$(Esc $id.Publisher)"" Version=""$($id.Version)"" ProcessorArchitecture=""$($id.ProcessorArchitecture)"" Uri=""$env:TAG_URL/$($d.Name)"" />"
+          }
 
-          & $signtool.FullName sign /fd SHA256 /f $pfx /p $pwdPlain $env:MSIX
-          if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
-
-          Remove-Item $pfx -Force
-          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+          $msixName = Split-Path $env:MSIX -Leaf
+          $xml = @(
+            '<?xml version="1.0" encoding="utf-8"?>'
+            "<AppInstaller xmlns=""http://schemas.microsoft.com/appx/appinstaller/2021"" Version=""$env:VERSION"" Uri=""$env:LATEST_URL/NetFreeWidget.appinstaller"">"
+            "  <MainPackage Name=""$(Esc $env:PACKAGE_NAME)"" Publisher=""$(Esc $env:PUBLISHER)"" Version=""$env:VERSION"" ProcessorArchitecture=""$env:PLATFORM"" Uri=""$env:TAG_URL/$msixName"" />"
+            if ($deps) { '  <Dependencies>'; $deps; '  </Dependencies>' }
+            '  <UpdateSettings>'
+            '    <OnLaunch HoursBetweenUpdateChecks="0" />'
+            '    <AutomaticBackgroundTask />'
+            '  </UpdateSettings>'
+            '</AppInstaller>'
+          ) -join "`n"
+          $out = Join-Path $env:OUT_DIR 'NetFreeWidget.appinstaller'
+          Set-Content $out $xml -Encoding utf8 -NoNewline
+          Get-Content $out
+          Get-ChildItem $env:OUT_DIR | Format-Table Name, Length
 
       - name: Write release notes
         run: |
@@ -138,11 +212,16 @@ jobs:
             '### שינויים'
             $msg
             ''
-            '### התקנה'
-            '1. להוריד את כל הקבצים לאותה תיקייה.'
-            '2. להריץ PowerShell כמנהל: `powershell -ExecutionPolicy Bypass -File .\install.ps1`'
+            '### התקנה ראשונה'
+            "להוריד ולהריץ את [NetFreeWidget-Setup.exe]($env:LATEST_URL/NetFreeWidget-Setup.exe)."
+            'המתקין מבקש אישור מנהל פעם אחת (להתקנת תעודת החתימה), מתקין את הווידג''ט ורושם עדכונים אוטומטיים.'
+            'אם Windows מציג "Windows protected your PC": "More info" ← "Run anyway".'
             ''
-            'הסקריפט מתקין את התעודה `NetFreeWidget.cer` ל-LocalMachine\TrustedPeople ואז את חבילת ה-MSIX.'
+            '### עדכונים'
+            'מי שהתקין דרך המתקין מקבל גרסאות חדשות אוטומטית; אין צורך להוריד כלום.'
+            ''
+            '### התקנה ידנית (בלי עדכונים אוטומטיים)'
+            'להוריד את כל הקבצים לאותה תיקייה ולהריץ PowerShell: `powershell -ExecutionPolicy Bypass -File .\install.ps1`'
             ''
             "Commit: $env:GITHUB_SHA"
           )
@@ -157,3 +236,4 @@ jobs:
           body_path: ${{ runner.temp }}/notes.md
           files: release-out/*
           fail_on_unmatched_files: true
+          make_latest: true

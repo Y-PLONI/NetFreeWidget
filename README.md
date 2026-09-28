@@ -19,7 +19,8 @@
 NetFreeWidget/
 ├── NetFreeWidget.Core/               # לוגיקה (API, חישובים, מודלים)
 ├── NetFreeBoardWidgetProvider/       # COM server ו-IWidgetProvider
-└── NetFreeBoardWidgetPackage/        # אריזת MSIX ונכסים
+├── NetFreeBoardWidgetPackage/        # אריזת MSIX ונכסים
+└── Installer/                        # מתקין לפעם הראשונה (תעודה + התקנה עם עדכונים)
 ```
 
 ## דרישות מערכת
@@ -28,7 +29,19 @@ NetFreeWidget/
 - Visual Studio 2022 עם רכיב Windows App SDK / MSIX Packaging (לפיתוח)
 - Developer Mode (לבדיקות מקומיות)
 
-## בנייה והתקנה
+## התקנה למשתמשים
+
+להוריד ולהריץ את [NetFreeWidget-Setup.exe](https://github.com/Y-PLONI/NetFreeWidget/releases/latest/download/NetFreeWidget-Setup.exe).
+
+- המתקין מבקש אישור מנהל פעם אחת, כדי לסמוך על תעודת החתימה (`CN=Y-PLONI`), ואז מתקין את הווידג'ט למשתמש המחובר.
+- ההתקנה נעשית דרך קובץ `.appinstaller`, ולכן Windows בודק עדכונים בעצמו (בערך כל 8 שעות) ומתקין כל Release חדש בלי שום פעולה מצד המשתמש.
+- בלי חיבור לכתובות של GitHub אפשר להתקין ידנית עם `install.ps1` מה-Release (בלי עדכונים אוטומטיים).
+
+### חתימה
+
+כל ה-Releases נחתמים באותה תעודה חתומה-עצמית, שנשמרת בסודות של המאגר: `SIGNING_PFX_BASE64` (קובץ ה-pfx ב-Base64) ו-`SIGNING_PFX_PASSWORD`. ה-Publisher במניפסט חייב להיות זהה לנושא התעודה. אם מחליפים תעודה, משתמשים קיימים יצטרכו להריץ את המתקין שוב.
+
+## בנייה והתקנה (פיתוח)
 
 ראה [QUICK_START.md](QUICK_START.md) להתחלה מהירה, או [WIDGET_SETUP_GUIDE.md](WIDGET_SETUP_GUIDE.md) למדריך מלא.
 
