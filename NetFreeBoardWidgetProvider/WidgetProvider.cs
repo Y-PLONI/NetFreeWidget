@@ -166,7 +166,7 @@ namespace NetFreeBoardWidgetProvider
                 {
                     WidgetManager.GetDefault().UpdateWidget(new WidgetUpdateRequestOptions(widgetId)
                     {
-                        Template = BuildSettingsForm(SettingsStore.Load(), error),
+                        Template = BuildSettingsForm(SettingsStore.Load(), error, compact: size == WidgetSize.Small),
                         Data = "{}",
                         CustomState = ""
                     });
@@ -202,29 +202,56 @@ namespace NetFreeBoardWidgetProvider
                   "version": "1.5",
                   "body": [
                     {
-                      "type": "Image",
-                      "url": "${gauge}",
-                      "width": "96px",
-                      "horizontalAlignment": "Center",
-                      "altText": "${percentBig}"
+                      "type": "ColumnSet",
+                      "columns": [
+                        {
+                          "type": "Column",
+                          "width": "auto",
+                          "verticalContentAlignment": "Center",
+                          "items": [
+                            {
+                              "type": "Image",
+                              "url": "${gauge}",
+                              "width": "64px",
+                              "altText": "${percentBig}"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Column",
+                          "width": "stretch",
+                          "verticalContentAlignment": "Center",
+                          "items": [
+                            {
+                              "type": "TextBlock",
+                              "text": "${percentBig}",
+                              "weight": "Bolder",
+                              "size": "Medium"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "${status}",
+                              "wrap": true,
+                              "maxLines": 3,
+                              "color": "${statusColor}",
+                              "size": "Small",
+                              "spacing": "None"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "Action.Execute",
+                      "title": "רענן",
+                      "verb": "refresh"
                     },
                     {
-                      "type": "TextBlock",
-                      "text": "${percentBig}",
-                      "weight": "Bolder",
-                      "size": "Medium",
-                      "horizontalAlignment": "Center",
-                      "spacing": "None"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "${status}",
-                      "wrap": true,
-                      "maxLines": 2,
-                      "color": "${statusColor}",
-                      "size": "Small",
-                      "horizontalAlignment": "Center",
-                      "spacing": "None"
+                      "type": "Action.Execute",
+                      "title": "הגדרות",
+                      "verb": "settings"
                     }
                   ]
                 }
@@ -408,8 +435,12 @@ namespace NetFreeBoardWidgetProvider
             }
         }
 
-        /// <summary>The settings form, with the current values filled in (built directly, so no data binding is needed).</summary>
-        private static string BuildSettingsForm(WidgetSettings settings, string error)
+        /// <summary>
+        /// The settings form, with the current values filled in (built directly, so no data binding is needed).
+        /// <paramref name="compact"/> (Small size): the widget clips what does not fit, so save and cancel come
+        /// first and the heading and hint are left out. Clipped inputs still submit their current values.
+        /// </summary>
+        private static string BuildSettingsForm(WidgetSettings settings, string error, bool compact)
         {
             int cycleDay = settings.EffectiveCycleDay();
             var detected = cycleDay == 0 ? UsageTracker.GetCandidateDays(UsageService.LastUserId) : null;
@@ -423,7 +454,18 @@ namespace NetFreeBoardWidgetProvider
                 w.WriteString("version", "1.5");
                 w.WriteStartArray("body");
 
-                WriteText(w, "הגדרות החבילה", bolder: true);
+                if (compact)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("type", "ActionSet");
+                    WriteFormActions(w);
+                    w.WriteEndObject();
+                    WriteError(w, error);
+                }
+                else
+                {
+                    WriteText(w, "הגדרות החבילה", bolder: true);
+                }
 
                 w.WriteStartObject();
                 w.WriteString("type", "Input.Number");
@@ -453,7 +495,7 @@ namespace NetFreeBoardWidgetProvider
                 w.WriteEndArray();
                 w.WriteEndObject();
 
-                if (detected != null)
+                if (detected != null && !compact)
                 {
                     string hint = detected.Count == 1 ? $"זוהה אוטומטית: {detected[0]} לחודש"
                         : detected.Count is > 1 and <= 10 ? $"ימים אפשריים לפי המעקב: {string.Join(", ", detected)}"
@@ -473,26 +515,38 @@ namespace NetFreeBoardWidgetProvider
                 w.WriteEndArray();
                 w.WriteEndObject();
 
-                if (error.Length > 0)
-                {
-                    w.WriteStartObject();
-                    w.WriteString("type", "TextBlock");
-                    w.WriteString("text", error);
-                    w.WriteString("color", "Attention");
-                    w.WriteBoolean("wrap", true);
-                    w.WriteEndObject();
-                }
+                if (!compact)
+                    WriteError(w, error);
 
                 w.WriteEndArray();
 
-                w.WriteStartArray("actions");
-                WriteAction(w, "שמור", "save", "auto");
-                WriteAction(w, "ביטול", "cancel", "none");
-                w.WriteEndArray();
+                if (!compact)
+                    WriteFormActions(w);
 
                 w.WriteEndObject();
             }
             return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        }
+
+        /// <summary>The "actions" array of the settings form, for the card or for an ActionSet.</summary>
+        private static void WriteFormActions(Utf8JsonWriter w)
+        {
+            w.WriteStartArray("actions");
+            WriteAction(w, "שמור", "save", "auto");
+            WriteAction(w, "ביטול", "cancel", "none");
+            w.WriteEndArray();
+        }
+
+        private static void WriteError(Utf8JsonWriter w, string error)
+        {
+            if (error.Length == 0)
+                return;
+            w.WriteStartObject();
+            w.WriteString("type", "TextBlock");
+            w.WriteString("text", error);
+            w.WriteString("color", "Attention");
+            w.WriteBoolean("wrap", true);
+            w.WriteEndObject();
         }
 
         private static void WriteText(Utf8JsonWriter w, string text, bool bolder = false, bool subtle = false)
