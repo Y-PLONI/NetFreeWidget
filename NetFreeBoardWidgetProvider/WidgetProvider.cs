@@ -202,32 +202,29 @@ namespace NetFreeBoardWidgetProvider
                   "version": "1.5",
                   "body": [
                     {
+                      "type": "Image",
+                      "url": "${gauge}",
+                      "width": "96px",
+                      "horizontalAlignment": "Center",
+                      "altText": "${percentBig}"
+                    },
+                    {
                       "type": "TextBlock",
-                      "text": "נטפרי",
+                      "text": "${percentBig}",
                       "weight": "Bolder",
                       "size": "Medium",
-                      "wrap": true
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "${used} / ${total} GB",
-                      "wrap": true,
-                      "size": "Small"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "${percent}",
-                      "wrap": true,
-                      "size": "Small",
-                      "isSubtle": true,
-                      "isVisible": "${hasPercent}"
+                      "horizontalAlignment": "Center",
+                      "spacing": "None"
                     },
                     {
                       "type": "TextBlock",
                       "text": "${status}",
                       "wrap": true,
+                      "maxLines": 2,
                       "color": "${statusColor}",
-                      "size": "Small"
+                      "size": "Small",
+                      "horizontalAlignment": "Center",
+                      "spacing": "None"
                     }
                   ]
                 }
@@ -242,66 +239,26 @@ namespace NetFreeBoardWidgetProvider
                   "version": "1.5",
                   "body": [
                     {
+                      "type": "Image",
+                      "url": "${gauge}",
+                      "width": "220px",
+                      "horizontalAlignment": "Center",
+                      "altText": "${percentBig}"
+                    },
+                    {
                       "type": "TextBlock",
-                      "text": "גלישה - נטפרי",
+                      "text": "${percentBig}",
                       "weight": "Bolder",
-                      "size": "Large",
-                      "wrap": true
-                    },
-                    {
-                      "type": "ColumnSet",
-                      "columns": [
-                        {
-                          "type": "Column",
-                          "width": "stretch",
-                          "items": [
-                            {
-                              "type": "TextBlock",
-                              "text": "נוצל:",
-                              "weight": "Bolder",
-                              "wrap": true
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "${used} GB",
-                              "size": "Large",
-                              "wrap": true
-                            }
-                          ]
-                        },
-                        {
-                          "type": "Column",
-                          "width": "stretch",
-                          "items": [
-                            {
-                              "type": "TextBlock",
-                              "text": "חבילה:",
-                              "weight": "Bolder",
-                              "wrap": true
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "${total} GB",
-                              "size": "Large",
-                              "wrap": true
-                            }
-                          ]
-                        }
-                      ]
+                      "size": "ExtraLarge",
+                      "horizontalAlignment": "Center",
+                      "spacing": "None"
                     },
                     {
                       "type": "TextBlock",
-                      "text": "${percent}",
-                      "wrap": true,
-                      "spacing": "Medium",
-                      "isVisible": "${hasPercent}"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "תקין להיום: ${expected} GB",
-                      "wrap": true,
-                      "spacing": "Small",
-                      "isVisible": "${hasExpected}"
+                      "text": "${used} מתוך ${total} GB",
+                      "isSubtle": true,
+                      "horizontalAlignment": "Center",
+                      "spacing": "None"
                     },
                     {
                       "type": "TextBlock",
@@ -309,13 +266,31 @@ namespace NetFreeBoardWidgetProvider
                       "wrap": true,
                       "color": "${statusColor}",
                       "weight": "Bolder",
-                      "spacing": "Small"
+                      "horizontalAlignment": "Center",
+                      "spacing": "Medium"
                     },
                     {
                       "type": "TextBlock",
                       "text": "${exhaustion}",
                       "wrap": true,
                       "isVisible": "${hasExhaustion}",
+                      "horizontalAlignment": "Center",
+                      "spacing": "Small"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "תקין להיום: ${expected} GB (הסימון הכחול)",
+                      "wrap": true,
+                      "isVisible": "${hasExpected}",
+                      "horizontalAlignment": "Center",
+                      "spacing": "Medium"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "${percent}",
+                      "wrap": true,
+                      "isVisible": "${hasPercent}",
+                      "horizontalAlignment": "Center",
                       "spacing": "Small"
                     },
                     {
@@ -325,7 +300,8 @@ namespace NetFreeBoardWidgetProvider
                       "size": "Small",
                       "isSubtle": true,
                       "isVisible": "${hasCycle}",
-                      "spacing": "Medium"
+                      "horizontalAlignment": "Center",
+                      "spacing": "Small"
                     }
                   ],
                   "actions": [
@@ -352,40 +328,58 @@ namespace NetFreeBoardWidgetProvider
                   "version": "1.5",
                   "body": [
                     {
-                      "type": "TextBlock",
-                      "text": "גלישה - נטפרי",
-                      "weight": "Bolder",
-                      "size": "Medium",
-                      "wrap": true
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "נוצל: ${used} GB",
-                      "wrap": true
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "חבילה: ${total} GB",
-                      "wrap": true
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "${percent}",
-                      "wrap": true,
-                      "isVisible": "${hasPercent}"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "תקין להיום: ${expected} GB",
-                      "wrap": true,
-                      "isVisible": "${hasExpected}"
+                      "type": "ColumnSet",
+                      "columns": [
+                        {
+                          "type": "Column",
+                          "width": "auto",
+                          "verticalContentAlignment": "Center",
+                          "items": [
+                            {
+                              "type": "Image",
+                              "url": "${gauge}",
+                              "width": "130px",
+                              "altText": "${percentBig}"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Column",
+                          "width": "stretch",
+                          "verticalContentAlignment": "Center",
+                          "items": [
+                            {
+                              "type": "TextBlock",
+                              "text": "${percentBig}",
+                              "weight": "Bolder",
+                              "size": "ExtraLarge"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "${used} / ${total} GB",
+                              "isSubtle": true,
+                              "spacing": "None",
+                              "wrap": true
+                            }
+                          ]
+                        }
+                      ]
                     },
                     {
                       "type": "TextBlock",
                       "text": "${status}",
                       "wrap": true,
                       "color": "${statusColor}",
-                      "weight": "Bolder"
+                      "weight": "Bolder",
+                      "spacing": "Small"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "תקין להיום: ${expected} GB",
+                      "wrap": true,
+                      "size": "Small",
+                      "isVisible": "${hasExpected}",
+                      "spacing": "None"
                     },
                     {
                       "type": "TextBlock",
@@ -393,7 +387,8 @@ namespace NetFreeBoardWidgetProvider
                       "wrap": true,
                       "size": "Small",
                       "isSubtle": true,
-                      "isVisible": "${hasCycle}"
+                      "isVisible": "${hasCycle}",
+                      "spacing": "None"
                     }
                   ],
                   "actions": [
@@ -549,6 +544,15 @@ namespace NetFreeBoardWidgetProvider
                 writer.WriteStartObject();
                 writer.WriteString("used", snapshot.IsNoPackage ? "—" : snapshot.UsedGb.ToString("F2", CultureInfo.InvariantCulture));
                 writer.WriteString("total", snapshot.TotalGb.ToString("F1", CultureInfo.InvariantCulture));
+                bool hasUsage = !snapshot.IsError && !snapshot.IsNoPackage && snapshot.TotalGb > 0;
+                double quota = snapshot.TotalGb;
+                writer.WriteString("gauge", GaugeRenderer.Render(
+                    hasUsage ? snapshot.UsedGb / quota : double.NaN,
+                    hasUsage ? snapshot.ExpectedLoGb / quota : double.NaN,
+                    hasUsage ? snapshot.ExpectedHiGb / quota : double.NaN));
+                writer.WriteString("percentBig", hasUsage
+                    ? (snapshot.UsedGb / quota * 100).ToString("F0", CultureInfo.InvariantCulture) + "%"
+                    : "—");
                 writer.WriteString("expected", snapshot.ExpectedText);
                 writer.WriteBoolean("hasExpected", snapshot.ExpectedText.Length > 0);
                 writer.WriteString("percent", snapshot.PercentText);

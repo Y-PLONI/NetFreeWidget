@@ -42,6 +42,9 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "✅ NuGet packages restored" -ForegroundColor Green
 Write-Host ""
 
+# A running provider locks its exe in the layout folder; Windows relaunches it on the next widget activation.
+Get-Process NetFreeBoardWidgetProvider -ErrorAction SilentlyContinue | Stop-Process -Force
+
 # Build the solution
 Write-Host "🔨 Building solution..." -ForegroundColor Cyan
 & $msbuildPath NetFreeWidget.sln /p:Configuration=$Configuration /p:Platform=$Platform /v:minimal

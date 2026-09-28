@@ -29,5 +29,9 @@ namespace NetFreeWidget.Core.Models
         public string CycleText { get; set; } = "";
 
         public double UsedPercent { get; set; }
+
+        /// <summary>On-track usage for today, as a range over the possible reset days (NaN when unknown).</summary>
+        public double ExpectedLoGb { get; set; } = double.NaN;
+        public double ExpectedHiGb { get; set; } = double.NaN;
     }
 }

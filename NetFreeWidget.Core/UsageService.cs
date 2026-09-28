@@ -193,6 +193,8 @@ namespace NetFreeWidget.Core
             }
 
             bool exact = startLo == startHi;
+            snapshot.ExpectedLoGb = expLo;
+            snapshot.ExpectedHiGb = expHi;
             snapshot.ExpectedText = FormatRange(expLo, expHi, "F2");
             snapshot.PercentText = $"{usedPercent} · עבר {FormatRange(fracLo * 100, fracHi * 100, "F0")}% מהחודש";
             snapshot.CycleText = configuredDay > 0
