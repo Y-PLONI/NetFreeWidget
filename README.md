@@ -1,79 +1,38 @@
 # NetFree Widget - ווידג'ט מעקב גלישה לנטפרי
 
-אפליקציית Windows למעקב אחר נפח הגלישה בנטפרי - עם תמיכה בווידג'ט שולחני ובלוח הווידג'טים של Windows 11!
+ווידג'ט ללוח הווידג'טים של Windows 11 למעקב אחר נפח הגלישה בנטפרי.
 
 ## תכונות
 
-### ווידג'ט שולחני
-- 📊 מעקב בזמן אמת אחר נפח הגלישה
-- 📈 חישוב חריגה יומית חכם
+- 📊 נפח שנוצל מול גודל החבילה
+- 📈 חישוב חריגה יומית חכם (כולל מצב סופ"ש של יום אחד או שניים)
 - 🔮 תחזית סיום חבילה
-- ⚙️ הגדרות מותאמות אישית
-- 🎨 עיצוב Material Design נקי
-- 🌙 תמיכה במצב כהה אוטומטי
-- 🪟 קצוות מעוגלים בסגנון Windows 11
-- 👻 לא מופיע בשורת המשימות (ווידג'ט אמיתי!)
-- 🖱️ ניתן לגרירה
-- 💾 משקל קל (פחות מ-2MB)
-
-### ווידג'ט ללוח הווידג'טים (Windows 11)
-- 📱 אינטגרציה מלאה עם Windows 11 Widgets Board
-- 📏 תמיכה ב-3 גדלים: Small, Medium, Large
-- 🔄 רענון אוטומטי
-- 🎯 Adaptive Cards עם תמיכה ב-Dark/Light Mode
-- 📦 התקנה מ-Microsoft Store (בקרוב)
+- 📏 3 גדלים: Small, Medium, Large
+- 🔄 כפתור רענן
+- 🪶 צריכת משאבים נמוכה: אין עבודה ברקע, בקשת רשת אחת משותפת עם מטמון, והתהליך נסגר כשאין ווידג'טים
 
 ## מבנה הפרויקט
 
 ```
 NetFreeWidget/
-├── NetFreeWidget/                    # ווידג'ט שולחני WPF
-├── NetFreeWidget.Core/               # לוגיקה משותפת (API, חישובים)
-├── NetFreeBoardWidgetProvider/       # Provider ללוח הווידג'טים
-└── NetFreeBoardWidgetPackage/        # אריזת MSIX להתקנה מהחנות
+├── NetFreeWidget.Core/               # לוגיקה (API, חישובים, מודלים)
+├── NetFreeBoardWidgetProvider/       # COM server ו-IWidgetProvider
+└── NetFreeBoardWidgetPackage/        # אריזת MSIX ונכסים
 ```
 
 ## דרישות מערכת
 
-### לווידג'ט שולחני:
-- Windows 10/11
-- .NET 8.0 Runtime
-
-### לווידג'ט בלוח:
-- Windows 11 (Build 19041+)
-- Visual Studio 2022 (לפיתוח)
+- Windows 11
+- Visual Studio 2022 עם רכיב Windows App SDK / MSIX Packaging (לפיתוח)
 - Developer Mode (לבדיקות מקומיות)
 
-## התקנה והרצה
+## בנייה והתקנה
 
-### ווידג'ט שולחני
+ראה [QUICK_START.md](QUICK_START.md) להתחלה מהירה, או [WIDGET_SETUP_GUIDE.md](WIDGET_SETUP_GUIDE.md) למדריך מלא.
 
-#### אופציה 1: הרצה עם .NET Runtime (קל ביותר)
-1. התקן .NET 8.0 Runtime מ-[Microsoft](https://dotnet.microsoft.com/download/dotnet/8.0)
-2. בנה את הפרויקט:
-```bash
-dotnet publish -c Release
-```
-3. הקובץ יימצא ב-`bin/Release/net8.0-windows/publish/NetFreeWidget.exe`
-
-#### אופציה 2: קובץ עצמאי (Self-Contained)
-לקובץ EXE שעובד ללא התקנת .NET:
-```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
-```
-
-### ווידג'ט בלוח הווידג'טים
-
-#### התחלה מהירה
-ראה [QUICK_START.md](QUICK_START.md) להתחלה מהירה.
-
-#### מדריך מפורט
-ראה [WIDGET_SETUP_GUIDE.md](WIDGET_SETUP_GUIDE.md) למדריך מלא.
-
-#### בנייה והתקנה
 ```powershell
-# שימוש בסקריפט אוטומטי
-.\build-and-deploy.ps1 -Configuration Debug -Platform x64
+# בנייה (Release כברירת מחדל) והתקנה
+.\build-and-deploy.ps1 -Platform x64
 
 # או ב-Visual Studio:
 # 1. פתח NetFreeWidget.sln
@@ -81,53 +40,52 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 # 3. Build + Deploy
 ```
 
-## שימוש
+> שים לב: `dotnet build` לא מספיק. יש לבנות עם MSBuild של Visual Studio (הסקריפט עושה זאת).
 
-### הגדרות ראשוניות
-1. הרץ את הווידג'ט (שולחני או בלוח)
-2. לחץ על ⚙️ להגדרות (בווידג'ט השולחני)
-3. הזן:
-   - תאריך התחלת החבילה (dd/MM/yyyy)
-   - גודל החבילה ב-GB
-   - בחר מצב חישוב סופ"ש (יום אחד / שני ימים)
-4. לחץ "שמור"
+## הגדרות
 
-### שיתוף הגדרות
-שני הווידג'טים (שולחני + לוח) משתמשים באותו קובץ הגדרות:
+הווידג'ט קורא את ההגדרות מהקובץ:
 ```
 %APPDATA%\NetFreeWidget\settings.json
 ```
 
-הווידג'ט יתעדכן אוטומטית כל 5 דקות.
+```json
+{
+  "PackageStartDate": "2024-01-15",
+  "PackageQuotaGb": 100.0,
+  "WeekendMode": "two"
+}
+```
+
+- `PackageStartDate` - תאריך התחלת החבילה (yyyy-MM-dd)
+- `PackageQuotaGb` - גודל החבילה ב-GB
+- `WeekendMode` - `"two"` (שני ימי סופ"ש) או `"one"` (שישי ושבת נספרים כיום אחד)
+
+שינוי בקובץ נקלט בעדכון הבא של הווידג'ט.
+
+## עדכון נתונים
+
+- הנתונים מתעדכנים בכל פתיחה של לוח הווידג'טים, ונשמרים במטמון ל-10 דקות.
+- כפתור "רענן" עוקף את המטמון (עם מרווח מינימלי של 10 שניות).
+- כשאין חיבור, הניסיונות מתרווחים בהדרגה (30 שניות עד 15 דקות).
 
 ## טכנולוגיות
 
-- **Frontend**: WPF (ווידג'ט שולחני), Adaptive Cards (ווידג'ט בלוח)
-- **Backend**: C# + .NET 8.0
-- **API**: NetFree API
-- **Packaging**: MSIX (Windows App SDK)
-- **Dependencies**: Newtonsoft.Json, Microsoft.WindowsAppSDK
+- C# + .NET 8, Adaptive Cards
+- Windows App SDK (Widgets), אריזת MSIX
+- System.Text.Json
 
 ## פיתוח
 
-### מבנה הקוד
-- `NetFreeWidget.Core` - לוגיקה משותפת (NetFreeApi, UsageCalculator, UsageService)
-- `NetFreeWidget` - ווידג'ט שולחני WPF
-- `NetFreeBoardWidgetProvider` - COM server ו-IWidgetProvider
-- `NetFreeBoardWidgetPackage` - MSIX manifest ונכסים
+- לוגיקה וחישובים → `NetFreeWidget.Core`
+- תצוגת הכרטיסים (Adaptive Cards) → `NetFreeBoardWidgetProvider/WidgetProvider.cs`
+- פתרון בעיות → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-### הוספת תכונות
-1. לוגיקה משותפת → `NetFreeWidget.Core`
-2. UI שולחני → `NetFreeWidget/MainWindow.xaml`
-3. UI לוח → `NetFreeBoardWidgetProvider/WidgetProvider.cs` (Adaptive Cards)
+> התוכנה השולחנית (WPF) הקודמת נמצאת בענף `master`.
 
 ## רישיון
 
 MIT License
-
-## תרומה
-
-Pull requests מתקבלים בברכה! אנא פתח issue קודם לדיון על שינויים גדולים.
 
 ## קרדיטים
 

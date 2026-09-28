@@ -4,20 +4,19 @@
 
 ```
 NetFreeWidget.sln
-├── NetFreeWidget/                    # ווידג'ט שולחני WPF (קיים)
-├── NetFreeWidget.Core/               # לוגיקה משותפת (חדש)
+├── NetFreeWidget.Core/               # לוגיקה (API, חישובים, מודלים)
 │   ├── Models/
 │   │   ├── UsageSnapshot.cs
 │   │   └── WidgetSettings.cs
 │   ├── NetFreeApi.cs
 │   ├── UsageCalculator.cs
 │   └── UsageService.cs
-├── NetFreeBoardWidgetProvider/       # Provider ללוח הווידג'טים (חדש)
+├── NetFreeBoardWidgetProvider/       # Provider ללוח הווידג'טים
 │   ├── Program.cs
 │   ├── WidgetProvider.cs
 │   ├── WidgetProviderFactory.cs
 │   └── SettingsStore.cs
-└── NetFreeBoardWidgetPackage/        # אריזת MSIX (חדש)
+└── NetFreeBoardWidgetPackage/        # אריזת MSIX
     ├── Package.appxmanifest
     └── ProviderAssets/
 ```
@@ -94,7 +93,7 @@ NetFreeWidget.sln
 
 ## שלב 5: הגדרות ראשוניות
 
-הווידג'ט משתמש באותו קובץ הגדרות כמו הווידג'ט השולחני:
+הווידג'ט קורא את ההגדרות מהקובץ:
 ```
 %APPDATA%\NetFreeWidget\settings.json
 ```
@@ -107,8 +106,6 @@ NetFreeWidget.sln
   "WeekendMode": "two"
 }
 ```
-
-או השתמש בווידג'ט השולחני להגדרת הפרמטרים.
 
 ## שלב 6: הכנה לפרסום
 
@@ -156,11 +153,8 @@ NetFreeWidget.sln
 
 ## טיפים נוספים
 
-### שיתוף הגדרות:
-הווידג'ט השולחני והווידג'ט בלוח משתמשים באותו קובץ הגדרות, כך שהמשתמש יכול להגדיר פעם אחת.
-
 ### עדכון אוטומטי:
-הווידג'ט מתעדכן אוטומטית כל 5 דקות (ניתן לשנות ב-WidgetProvider.cs).
+הווידג'ט מתעדכן בכל פתיחה של לוח הווידג'טים. הנתונים נשמרים במטמון ל-10 דקות (ניתן לשנות ב-`NetFreeWidget.Core/UsageService.cs`), וכפתור "רענן" עוקף את המטמון.
 
 ### תמיכה בגדלים:
 הווידג'ט תומך ב-3 גדלים: Small, Medium, Large. כל גודל מציג מידע שונה.

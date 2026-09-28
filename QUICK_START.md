@@ -1,14 +1,10 @@
 # התחלה מהירה - ווידג'ט נטפרי ללוח הווידג'טים
 
-## מה נוצר?
-
-יצרתי עבורך 3 פרויקטים חדשים:
+## מבנה הפרויקט
 
 1. **NetFreeWidget.Core** - לוגיקה משותפת (API, חישובים, מודלים)
 2. **NetFreeBoardWidgetProvider** - ה-Provider ללוח הווידג'טים של Windows 11
 3. **NetFreeBoardWidgetPackage** - אריזת MSIX להתקנה מהחנות
-
-הפרויקט המקורי שלך (NetFreeWidget) נשאר בדיוק כמו שהיה!
 
 ## צעדים הבאים
 
@@ -55,7 +51,7 @@ Settings → Privacy & Security → For developers → Developer Mode
 - **Medium**: שימוש, חבילה, תקין להיום, סטטוס + כפתור רענן
 - **Large**: כל המידע + תחזית גמר חבילה
 
-הווידג'ט משתמש באותו קובץ הגדרות כמו הווידג'ט השולחני:
+הווידג'ט קורא את ההגדרות מהקובץ:
 `%APPDATA%\NetFreeWidget\settings.json`
 
 ## מידע טכני חשוב
@@ -70,9 +66,6 @@ E7B3C2A1-4F5D-4A8B-9C3E-1D2F3A4B5C6D
 1. `NetFreeBoardWidgetProvider/WidgetProviderFactory.cs` (שורה 9)
 2. `NetFreeBoardWidgetProvider/WidgetProvider.cs` (שורה 13)
 3. `NetFreeBoardWidgetPackage/Package.appxmanifest` (שורות 42, 52)
-
-### שיתוף הגדרות
-שני הווידג'טים (שולחני + לוח) משתמשים באותו קובץ הגדרות, כך שאפשר להגדיר פעם אחת.
 
 ## לפני פרסום לחנות
 
