@@ -94,7 +94,7 @@ jobs:
             Copy-Item $d.FullName (Join-Path $env:OUT_DIR "Dependency_$($d.Name)")
           }
 
-          Copy-Item .github/release/install.ps1 $env:OUT_DIR
+          Copy-Item .github/scripts/install.ps1 $env:OUT_DIR
           Get-ChildItem $env:OUT_DIR | Format-Table Name, Length
 
       - name: Create self-signed certificate and sign
