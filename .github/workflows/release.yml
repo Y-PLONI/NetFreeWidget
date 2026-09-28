@@ -162,7 +162,6 @@ jobs:
             }
             if (-not $signed) { throw "signtool failed for $file" }
           }
-          Remove-Item $env:PFX -Force
 
       - name: Write .appinstaller
         env:
@@ -203,6 +202,22 @@ jobs:
           Get-Content $out
           Get-ChildItem $env:OUT_DIR | Format-Table Name, Length
 
+      # Nothing is published unless a clean machine can install it through the installer and then update.
+      - name: Test install and automatic update (local feed)
+        shell: powershell
+        env:
+          PFX: ${{ steps.cert.outputs.pfx }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: >
+          .github/scripts/test-install.ps1 -Mode Local -Version $env:VERSION -ReleaseDir $env:OUT_DIR
+          -Pfx $env:PFX -PfxPassword $env:SIGNING_PFX_PASSWORD
+
+      - name: Remove signing key
+        if: always()
+        env:
+          PFX: ${{ steps.cert.outputs.pfx }}
+        run: if ($env:PFX -and (Test-Path $env:PFX)) { Remove-Item $env:PFX -Force }
+
       - name: Write release notes
         run: |
           $msg = git log -1 --pretty=format:%B
@@ -237,3 +252,22 @@ jobs:
           files: release-out/*
           fail_on_unmatched_files: true
           make_latest: true
+
+  # The published release, exactly as users get it: real GitHub URLs, upgrade from the previous release,
+  # and a fresh install through the downloaded installer.
+  verify-release:
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test the published release
+        shell: powershell
+        run: >
+          .github/scripts/test-install.ps1 -Mode Remote -Version 1.0.${{ github.run_number }}.0
+          -Repository ${{ github.repository }}

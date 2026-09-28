@@ -1,10 +1,5 @@
 using System;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Drawing;
-using System.IO;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -83,25 +78,19 @@ namespace WidgetSetup
         {
             try
             {
-                var cert = Config.LoadCertificate();
-                if (!IsTrusted(cert))
+                SetStatus("מתקין את תעודת החתימה של הווידג'ט.\r\nאם Windows מבקש הרשאות, יש לאשר.");
+                switch (await Task.Run(SetupSteps.EnsureCertificateTrusted))
                 {
-                    SetStatus("מתקין את תעודת החתימה של הווידג'ט.\r\nיש לאשר את בקשת ההרשאות של Windows.");
-                    int code = await Task.Run(TrustElevated);
-                    if (code == -1)
-                    {
+                    case SetupSteps.TrustResult.Declined:
                         Finish("ההתקנה בוטלה: בלי אישור מנהל אי אפשר להתקין את תעודת החתימה.", ok: false);
                         return;
-                    }
-                    if (code != 0 || !IsTrusted(cert))
-                    {
+                    case SetupSteps.TrustResult.Failed:
                         Finish("התקנת תעודת החתימה נכשלה.", ok: false);
                         return;
-                    }
                 }
 
                 SetStatus("מוריד ומתקין את הווידג'ט...\r\nזה עשוי לקחת דקה או שתיים.");
-                var (installed, output) = await Task.Run(InstallPackage);
+                var (installed, output) = await Task.Run(() => SetupSteps.InstallPackage(_config.AppInstallerUri));
                 if (installed)
                     Finish($"ההתקנה הושלמה!\r\n{_config.Done}\r\nהווידג'ט יתעדכן מעצמו כשתצא גרסה חדשה.", ok: true);
                 else
@@ -123,60 +112,6 @@ namespace WidgetSetup
             _progress.Visible = false;
             _close.Enabled = true;
             _close.Focus();
-        }
-
-        private static bool IsTrusted(X509Certificate2 cert)
-        {
-            using var store = new X509Store(StoreName.TrustedPeople, StoreLocation.LocalMachine);
-            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-            return store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false).Count > 0;
-        }
-
-        /// <summary>Relaunches this exe elevated to trust the certificate; -1 when the user declined the UAC prompt.</summary>
-        private static int TrustElevated()
-        {
-            var psi = new ProcessStartInfo(Application.ExecutablePath, Program.TrustCertArg)
-            {
-                UseShellExecute = true,
-                Verb = "runas",
-            };
-            try
-            {
-                using var process = Process.Start(psi)!;
-                process.WaitForExit();
-                return process.ExitCode;
-            }
-            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) // ERROR_CANCELLED
-            {
-                return -1;
-            }
-        }
-
-        /// <summary>Installs from the .appinstaller URL through the Appx module that ships with Windows.</summary>
-        private (bool ok, string output) InstallPackage()
-        {
-            string uri = _config.AppInstallerUri.Replace("'", "''");
-            string script =
-                "$ProgressPreference = 'SilentlyContinue'; " +
-                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " +
-                $"try {{ Add-AppxPackage -Path '{uri}' -AppInstallerFile -ForceTargetApplicationShutdown -ErrorAction Stop; exit 0 }} " +
-                "catch { Write-Output $_.Exception.Message; exit 1 }";
-
-            var psi = new ProcessStartInfo(
-                Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
-                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " +
-                Convert.ToBase64String(Encoding.Unicode.GetBytes(script)))
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                StandardOutputEncoding = Encoding.UTF8,
-            };
-
-            using var process = Process.Start(psi)!;
-            string output = process.StandardOutput.ReadToEnd().Trim();
-            process.WaitForExit();
-            return (process.ExitCode == 0, output);
         }
     }
 }
