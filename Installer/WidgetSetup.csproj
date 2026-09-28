@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="setup.ini" LogicalName="setup.ini" />
+    <EmbeddedResource Include="install-package.ps1" LogicalName="install-package.ps1" />
     <!-- Public part of the signing certificate; CI exports it from the signing secret before building. -->
     <EmbeddedResource Include="signing.cer" LogicalName="signing.cer" Condition="Exists('signing.cer')" />
   </ItemGroup>
