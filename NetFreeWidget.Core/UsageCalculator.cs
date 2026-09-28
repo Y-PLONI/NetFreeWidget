@@ -58,8 +58,18 @@ namespace NetFreeWidget.Core
             if (!DateTime.TryParse(packageStartDateStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out DateTime initStart))
                 return null;
 
-            var today = StartOfDay(DateTime.Now);
-            int desiredDay = initStart.Day;
+            return GetCycleDates(initStart.Day, DateTime.Now);
+        }
+
+        /// <summary>True when a cycle that resets on <paramref name="cycleDay"/> starts on <paramref name="date"/> (short months clamp to their last day).</summary>
+        public static bool IsCycleStart(int cycleDay, DateTime date)
+        {
+            return Math.Min(cycleDay, DateTime.DaysInMonth(date.Year, date.Month)) == date.Day;
+        }
+
+        public static (DateTime cycleStart, DateTime cycleEnd, DateTime today) GetCycleDates(int desiredDay, DateTime now)
+        {
+            var today = StartOfDay(now);
 
             int daysInMonth = DateTime.DaysInMonth(today.Year, today.Month);
             var cycleStart = new DateTime(today.Year, today.Month, Math.Min(desiredDay, daysInMonth));

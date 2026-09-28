@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using NetFreeWidget.Core.Models;
@@ -52,6 +53,7 @@ namespace NetFreeWidget.Core
             try
             {
                 usage = await NetFreeApi.GetUsageGb().ConfigureAwait(false);
+                UsageTracker.Record(DateTime.Now, usage);
                 return usage;
             }
             finally
@@ -71,7 +73,17 @@ namespace NetFreeWidget.Core
             return BuildSnapshot(await GetUsageGbAsync(force).ConfigureAwait(false), settings);
         }
 
+        // Beyond this spread of possible reset days a "range" says nothing useful.
+        private const int MaxUsefulCandidates = 10;
+
         public static UsageSnapshot BuildSnapshot(double currentUsageGb, WidgetSettings settings)
+        {
+            var learned = settings.EffectiveCycleDay() == 0 ? UsageTracker.GetCandidateDays() : null;
+            return BuildSnapshot(currentUsageGb, settings, DateTime.Now, learned);
+        }
+
+        /// <param name="learnedDays">Possible reset days from the tracker; used only when no day is configured.</param>
+        public static UsageSnapshot BuildSnapshot(double currentUsageGb, WidgetSettings settings, DateTime now, List<int>? learnedDays)
         {
             var snapshot = new UsageSnapshot();
 
@@ -82,57 +94,142 @@ namespace NetFreeWidget.Core
                 return snapshot;
             }
 
+            double quota = settings.PackageQuotaGb;
             snapshot.UsedGb = currentUsageGb;
-            snapshot.TotalGb = settings.PackageQuotaGb;
+            snapshot.TotalGb = quota;
 
-            var dates = UsageCalculator.GetCycleDates(settings.PackageStartDate);
-
-            if (settings.PackageQuotaGb <= 0 || dates == null)
+            if (quota <= 0)
             {
-                snapshot.StatusText = "חסרים נתונים להגדרה";
+                snapshot.IsPending = true;
+                snapshot.StatusText = "יש להגדיר את נפח החבילה";
                 return snapshot;
             }
 
-            var (cycleStart, cycleEnd, today) = dates.Value;
-            int totalUnits = UsageCalculator.CountUnits(cycleStart, cycleEnd, settings.WeekendMode);
-            int elapsedUnits = UsageCalculator.CountUnits(cycleStart, today, settings.WeekendMode);
+            snapshot.UsedPercent = Math.Min(currentUsageGb / quota * 100, 100);
+            string usedPercent = $"נוצל {snapshot.UsedPercent:F0}%";
 
-            double expectedGb = totalUnits > 0 ? (settings.PackageQuotaGb / totalUnits) * elapsedUnits : settings.PackageQuotaGb;
-            snapshot.ExpectedGb = expectedGb;
-            snapshot.UsedPercent = Math.Min((currentUsageGb / settings.PackageQuotaGb) * 100, 100);
+            // The reset day: exact when configured, otherwise whatever the tracker could narrow it down to.
+            int configuredDay = settings.EffectiveCycleDay();
+            var days = configuredDay > 0 ? new List<int> { configuredDay } : learnedDays ?? new List<int>();
 
-            if (currentUsageGb > expectedGb)
+            if (days.Count == 0 || days.Count > MaxUsefulCandidates)
             {
-                snapshot.IsOverLimit = true;
-                snapshot.StatusText = $"חריגה: {(currentUsageGb - expectedGb):F2} GB";
+                snapshot.IsPending = true;
+                snapshot.StatusText = "לומד את מועד האיפוס...";
+                snapshot.CycleText = "האיפוס יזוהה כשהצריכה תתאפס";
+                snapshot.PercentText = usedPercent;
+                return snapshot;
+            }
 
-                if (elapsedUnits > 0)
+            // Evaluate every possible reset day; the true one is among them, so the result is a range.
+            string mode = settings.WeekendMode;
+            double expLo = double.MaxValue, expHi = double.MinValue, fracLo = 1, fracHi = 0;
+            DateTime startLo = DateTime.MaxValue, startHi = DateTime.MinValue;
+            DateTime? exhaustLo = null, exhaustHi = null;
+            bool exhausted = false;
+            DateTime today = UsageCalculator.StartOfDay(now);
+
+            foreach (int day in days)
+            {
+                var (cycleStart, cycleEnd, t) = UsageCalculator.GetCycleDates(day, now);
+                today = t;
+                int totalUnits = UsageCalculator.CountUnits(cycleStart, cycleEnd, mode);
+                int elapsedUnits = UsageCalculator.CountUnits(cycleStart, today, mode);
+
+                double expected = totalUnits > 0 ? quota / totalUnits * elapsedUnits : quota;
+                double frac = totalUnits > 0 ? (double)elapsedUnits / totalUnits : 1;
+                expLo = Math.Min(expLo, expected);
+                expHi = Math.Max(expHi, expected);
+                fracLo = Math.Min(fracLo, frac);
+                fracHi = Math.Max(fracHi, frac);
+                if (cycleStart < startLo) startLo = cycleStart;
+                if (cycleStart > startHi) startHi = cycleStart;
+
+                if (elapsedUnits > 0 && currentUsageGb > expected)
                 {
-                    double ratePerUnit = currentUsageGb / elapsedUnits;
-                    double remainingGb = settings.PackageQuotaGb - currentUsageGb;
-
-                    if (remainingGb > 0)
+                    double remainingGb = quota - currentUsageGb;
+                    if (remainingGb <= 0)
                     {
-                        var exhaustDate = UsageCalculator.PredictExhaustionDate(today, remainingGb, ratePerUnit, settings.WeekendMode);
-                        if (exhaustDate.HasValue)
-                        {
-                            string dayName = HebrewDayNames[(int)exhaustDate.Value.DayOfWeek];
-                            string dateStr = exhaustDate.Value.ToString("dd/MM", CultureInfo.InvariantCulture);
-                            snapshot.ExhaustionText = $"תגמר ב{dayName} ({dateStr})";
-                        }
+                        exhausted = true;
                     }
-                    else
+                    else if (UsageCalculator.PredictExhaustionDate(today, remainingGb, currentUsageGb / elapsedUnits, mode) is DateTime date)
                     {
-                        snapshot.ExhaustionText = "החבילה הסתיימה!";
+                        if (exhaustLo == null || date < exhaustLo) exhaustLo = date;
+                        if (exhaustHi == null || date > exhaustHi) exhaustHi = date;
                     }
                 }
             }
+
+            bool exact = startLo == startHi;
+            snapshot.ExpectedText = FormatRange(expLo, expHi, "F2");
+            snapshot.PercentText = $"{usedPercent} · עבר {FormatRange(fracLo * 100, fracHi * 100, "F0")}% מהחודש";
+            snapshot.CycleText = configuredDay > 0
+                ? $"איפוס ב-{configuredDay} לחודש"
+                : exact
+                    ? $"איפוס ב-{startLo.Day} לחודש (זוהה אוטומטית)"
+                    : $"איפוס משוער: {FormatDays(days)} לחודש";
+
+            // A verdict is stated only when it holds for every possible reset day; the figure is the guaranteed part.
+            if (currentUsageGb > expHi)
+            {
+                snapshot.IsOverLimit = true;
+                snapshot.StatusText = exact
+                    ? $"חריגה: {(currentUsageGb - expHi):F2} GB"
+                    : $"חריגה של לפחות {(currentUsageGb - expHi):F2} GB";
+            }
+            else if (currentUsageGb <= expLo)
+            {
+                snapshot.StatusText = exact
+                    ? $"תקין: נותרו {(expLo - currentUsageGb):F1} GB"
+                    : $"תקין: נותרו לפחות {(expLo - currentUsageGb):F1} GB";
+            }
             else
             {
-                snapshot.StatusText = $"תקין: נותרו {(expectedGb - currentUsageGb):F1} GB";
+                snapshot.IsUncertain = true;
+                snapshot.StatusText = "גבולי: תלוי במועד האיפוס המדויק";
             }
 
+            if (exhausted)
+                snapshot.ExhaustionText = "החבילה הסתיימה!";
+            else if (snapshot.IsOverLimit && exhaustLo is DateTime lo && exhaustHi is DateTime hi)
+                snapshot.ExhaustionText = lo == hi
+                    ? $"תגמר ב{HebrewDayNames[(int)lo.DayOfWeek]} ({lo:dd/MM})"
+                    : $"תגמר בין {lo:dd/MM} ל-{hi:dd/MM}";
+
             return snapshot;
+        }
+
+        /// <summary>Days of the month as cyclic runs, e.g. {28..31, 1..3} -> "28–3".</summary>
+        private static string FormatDays(List<int> days)
+        {
+            var set = new bool[32];
+            foreach (int d in days)
+                set[d] = true;
+
+            // Start right after a missing day so a run that wraps past the month end stays in one piece.
+            int start = 1;
+            for (int d = 1; d <= 31; d++)
+                if (!set[d]) { start = d % 31 + 1; break; }
+
+            var runs = new List<string>();
+            for (int i = 0; i < 31;)
+            {
+                int d = (start - 1 + i) % 31 + 1;
+                if (!set[d]) { i++; continue; }
+
+                int first = d, last = d;
+                while (++i < 31 && set[(start - 1 + i) % 31 + 1])
+                    last = (start - 1 + i) % 31 + 1;
+                runs.Add(first == last ? $"{first}" : $"{first}–{last}");
+            }
+            return string.Join(", ", runs);
+        }
+
+        private static string FormatRange(double lo, double hi, string format)
+        {
+            string a = lo.ToString(format, CultureInfo.InvariantCulture);
+            string b = hi.ToString(format, CultureInfo.InvariantCulture);
+            return a == b ? a : $"{a}–{b}";
         }
     }
 }
